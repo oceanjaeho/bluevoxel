@@ -192,13 +192,14 @@
     var m = {
       flats: 0, flatHealth: 0, marsh: 0, marshEff: 0, seagrass: 0, seagrassMature: 0, seagrassEff: 0,
       debris: 0, dev: 0, industry: 0, resort: 0, fields: 0, farms: 0, ponds: 0, activePonds: 0,
-      solar: 0, walls: 0, walks: 0, ecoArea: 0, ecoHealthy: 0, stock: 0, absorbRate: 0, emitNext: 0, upper: 0
+      solar: 0, walls: 0, walks: 0, ecoArea: 0, ecoHealthy: 0, stock: 0, ecoStock: 0, absorbRate: 0, emitNext: 0, upper: 0
     };
     for (var i = 0; i < s.tiles.length; i++) {
       var t = s.tiles[i];
       if (t.debris) m.debris++;
       if (t.walk) m.walks++;
       m.stock += t.carbon;
+      if (BV.ECO[t.type]) m.ecoStock += t.carbon;
       m.emitNext += nextEmit(t);
       m.absorbRate += absorbRate(t);
       switch (t.type) {
@@ -750,7 +751,7 @@
   BV.sim = {
     MW: MW, MH: MH, STAGE_NAME: STAGE_NAME, RATE: RATE,
     newGame: newGame, normalizeCode: normalizeCode, metrics: metrics, absorbRate: absorbRate,
-    villageEmission: villageEmission, check: check, eligible: eligible, apply: apply, api: api,
+    villageEmission: villageEmission, check: check, eligible: eligible, apply: apply, api: api, toolCost: toolCost,
     currentCard: currentCard, choose: choose, endYear: endYear, speciesStatus: speciesStatus,
     describe: describe, evaluate: evaluate, summaryText: summaryText, wqTarget: wqTarget,
     isTidal: isTidal, isEco: isEco, at: at, noise: noise, hashStr: hashStr, BUFFER: BUFFER
