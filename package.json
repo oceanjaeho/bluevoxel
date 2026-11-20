@@ -1,11 +1,13 @@
 {
   "name": "bluevoxel",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
-  "description": "블루복셀: 갯벌마을 2050 — 블루카본·생태전환교육 웹 게임 프로토타입",
+  "description": "갯벌 수호대 — 손가락 하나로 즐기는 블루카본 생존 게임 (블루복셀)",
   "scripts": {
     "test": "node --test tests/*.test.mjs",
-    "balance": "node tools/balance.mjs",
-    "build": "node tools/build-single.mjs"
+    "balance": "node tools/game-balance.mjs",
+    "balance:prototype": "node tools/balance.mjs",
+    "build": "node tools/build-single.mjs",
+    "build:prototype": "node tools/build-single.mjs --src prototype"
   }
 }

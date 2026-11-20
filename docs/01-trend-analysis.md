@@ -114,3 +114,5 @@
 교육 설계
 - Habgood, M. P. J., & Ainsworth, S. E. (2011). Motivating children to learn effectively: Exploring the value of intrinsic integration in educational games. *Journal of the Learning Sciences*, 20(2), 169–206.
 - Bogost, I. (2007). *Persuasive Games: The Expressive Power of Videogames*. MIT Press.
+
+> 2026년 11월 업데이트: 학생 피드백에 따라 대표작을 5분 생존 액션 **갯벌 수호대**로 바꿨어요. 조사와 이유는 [05 캐주얼 전환](05-casual-pivot.md)에 있어요.
