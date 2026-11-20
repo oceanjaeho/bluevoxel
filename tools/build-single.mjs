@@ -23,7 +23,7 @@ if (fragment) {
     .replace(/<\/html>\s*/i, '')
     .replace(/<head>\s*/i, '')
     .replace(/<\/head>\s*/i, '')
-    .replace(/<body>\s*/i, '')
+    .replace(/<body[^>]*>\s*/i, '')
     .replace(/<\/body>\s*/i, '')
     .replace(/<meta charset="utf-8">\s*/i, '')
     .replace(/<meta name="viewport"[^>]*>\s*/i, '');

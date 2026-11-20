@@ -5,22 +5,20 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>블루복셀 갯벌마을 2050</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<meta name="description" content="갯벌을 되살리며 블루카본과 생태전환을 배우는 복셀 전략 게임 프로토타입">
+<meta name="description" content="갯벌을 되살리며 블루카본과 생태전환을 배우는 복셀 전략 게임">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Do+Hyeon&family=Gowun+Dodum&family=IBM+Plex+Mono:wght@500;600&display=swap">
 <link rel="stylesheet" href="css/style.css">
 </head>
-<body>
+<body class="title-mode">
 <div class="app" id="app">
   <header class="hud" id="hud">
-    <div class="brand">
-      <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
-      <span class="brand-name"><strong>블루복셀</strong><span>물때마을 2050</span></span>
-    </div>
+    <div class="brand"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><strong>블루복셀</strong></div>
     <div class="year" id="hudYear" aria-live="polite"></div>
     <div class="stats" id="stats"></div>
     <div class="hud-actions">
+      <button class="icon-btn" id="soundBtn" type="button" aria-label="소리 끄기">♪</button>
       <button class="icon-btn" id="helpBtn" type="button" aria-label="게임 방법">?</button>
       <button class="icon-btn" id="menuBtn" type="button" aria-label="처음 화면">☰</button>
     </div>
@@ -29,12 +27,9 @@
   <nav class="tools" id="tools" aria-label="도구"></nav>
 
   <main class="stage" id="stage">
-    <canvas id="map" role="img" aria-label="물때마을 앞바다 복셀 지도. 칸을 눌러 살펴보거나 도구를 써요."></canvas>
-    <div class="hint" id="hint" hidden>
-      <span class="hint-label">도움말</span>
-      <p id="hintText"></p>
-      <button class="hint-close" id="hintClose" type="button" aria-label="도움말 닫기">×</button>
-    </div>
+    <canvas id="map" role="img" aria-label="물때마을 앞바다 복셀 지도"></canvas>
+    <div class="missions" id="missions" hidden></div>
+    <div class="hint" id="hint" hidden><p id="hintText"></p><button class="hint-close" id="hintClose" type="button" aria-label="도움말 닫기">×</button></div>
     <div class="map-ctrl">
       <div class="seg" role="group" aria-label="지도 보기">
         <button type="button" data-view="base" aria-pressed="true">기본</button>
@@ -50,11 +45,12 @@
     <div class="legend" id="legend" hidden></div>
     <div class="tide" id="tide">
       <div class="tide-gauge" aria-hidden="true"><span id="tideFill"></span></div>
-      <div class="tide-text"><span class="tide-label">물때</span><b id="tideState">밀물</b></div>
+      <b class="tide-state" id="tideState">밀물</b>
       <button type="button" class="tide-btn" id="tideBtn" aria-pressed="false" aria-label="물때 멈추기">Ⅱ</button>
     </div>
     <button type="button" class="next" id="nextBtn"><span id="nextLabel">다음 해로</span><span class="next-arrow" aria-hidden="true">▶</span></button>
     <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+    <div class="banner" id="banner" hidden></div>
   </main>
 
   <aside class="panel" id="panel">
@@ -63,19 +59,21 @@
       <button type="button" role="tab" data-tab="info" aria-selected="true">정보</button>
       <button type="button" role="tab" data-tab="codex" aria-selected="false">도감 <span class="tab-count" id="codexCount"></span></button>
       <button type="button" role="tab" data-tab="village" aria-selected="false">마을</button>
-      <button type="button" role="tab" data-tab="notes" aria-selected="false">노트</button>
+      <button type="button" role="tab" data-tab="notes" aria-selected="false">과학</button>
       <button type="button" class="panel-toggle" id="panelToggle" aria-expanded="true" aria-label="노트 접기">▾</button>
     </div>
     <div class="panel-body" id="panelBody" role="tabpanel"></div>
   </aside>
 </div>
 
-<div class="modal" id="modal" hidden>
-  <div class="modal-card" id="modalCard" role="dialog" aria-modal="true" aria-labelledby="modalTitle" tabindex="-1"></div>
-</div>
+<div class="screen" id="screen"></div>
+<div class="modal" id="modal" hidden><div class="modal-card" id="modalCard" role="dialog" aria-modal="true" aria-labelledby="modalTitle" tabindex="-1"></div></div>
+<div class="toast-top" id="toastTop" aria-live="polite"></div>
+<canvas class="confetti" id="confetti" hidden></canvas>
 
 <script src="js/data.js"></script>
 <script src="js/sim.js"></script>
+<script src="js/audio.js"></script>
 <script src="js/render.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/main.js"></script>

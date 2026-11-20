@@ -111,3 +111,52 @@ test('모든 카드의 선택지는 오류 없이 적용된다', () => {
     });
   }
 });
+
+test('결과 코드는 되돌려 읽을 수 있고, 한 글자만 틀려도 거부된다', () => {
+  const s = play(BV, 'restorer', 'CLASS7');
+  const code = sim.encodeResult(s);
+  assert.match(code, /^BV1-[0-9A-Z]{5}(-[0-9A-Z]{1,5})+$/);
+  const d = sim.decodeResult('학생 결과: ' + code + ' 입니다');
+  const ev = sim.evaluate(s);
+  assert.equal(d.ending, ev.key);
+  assert.equal(d.species, ev.species);
+  assert.equal(d.support, s.support);
+  assert.equal(d.neutrality, Math.round(ev.neutrality * 100) / 100);
+  assert.equal(d.cls, sim.hashStr('CLASS7') & 0xffff);
+  assert.equal(d.choices.industry, 1); // restorer: 반대
+  const broken = code.slice(0, 6) + (code[6] === 'A' ? 'B' : 'A') + code.slice(7);
+  assert.equal(sim.decodeResult(broken), null);
+});
+
+test('미션은 조건을 채우면 보상을 주고 다음 미션으로 바뀐다', () => {
+  const s = sim.newGame('T');
+  if (s.card) sim.choose(s, 2);
+  const before = s.budget;
+  const uppers = s.tiles.map((t, i) => i).filter((i) => s.tiles[i].type === 'upper' && !s.tiles[i].debris);
+  let got = [];
+  for (const i of uppers.slice(0, 3)) {
+    const r = sim.apply(s, 'marsh', i);
+    got = got.concat(r.missions || []);
+  }
+  assert.ok(got.includes('m_plant'));
+  assert.ok(s.missions.done.includes('m_plant'));
+  assert.ok(!s.missions.active.includes('m_plant'));
+  assert.equal(s.missions.active.length, 3);
+  assert.equal(s.budget, before - 6 + 2);
+});
+
+test('난이도는 시작 예산과 배출량을 바꾼다', () => {
+  const e = sim.newGame('T', 'easy');
+  const h = sim.newGame('T', 'hard');
+  assert.ok(e.budget > h.budget);
+  assert.ok(sim.villageEmission(e) < sim.villageEmission(h));
+  assert.equal(sim.newGame('T', 'weird').diff, 'normal');
+});
+
+test('자동 플레이는 끝까지 진행되고 성향에 따라 결과가 다르다', () => {
+  const eco = sim.autoGame('AUTO', 'eco');
+  const dev = sim.autoGame('AUTO', 'dev');
+  assert.equal(eco.ended, true);
+  assert.ok(sim.evaluate(eco).neutrality > sim.evaluate(dev).neutrality);
+  assert.ok(sim.checkAchievements(eco, {}).length >= 1);
+});

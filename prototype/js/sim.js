@@ -122,11 +122,15 @@
   })();
 
   /* ---------- 새 게임 ---------- */
-  function newGame(code) {
+  function diffOf(s) { return BV.DIFFICULTY[s.diff] || BV.DIFFICULTY.normal; }
+
+  function newGame(code, diff) {
     code = normalizeCode(code);
+    diff = BV.DIFFICULTY[diff] ? diff : 'normal';
     var s = {
-      v: 1, code: code, rng: hashStr(code) || 1, year: C.START_YEAR,
-      budget: C.START_BUDGET, support: C.START_SUPPORT, wq: C.START_WQ,
+      v: 1, code: code, diff: diff, rng: hashStr(code) || 1, year: C.START_YEAR,
+      budget: BV.DIFFICULTY[diff].budget, support: C.START_SUPPORT, wq: C.START_WQ,
+      missions: { active: BV.MISSIONS.slice(0, 3).map(function (d) { return d.id; }), done: [] },
       cuts: {}, policies: {}, flags: {}, history: [], decisions: [], seen: {}, present: [],
       tiles: [], card: 'start', pendingTyphoon: 0, heat: false,
       randomOrder: [], randomIdx: 0,
@@ -185,7 +189,7 @@
   }
   function villageEmission(s) {
     var yrs = clamp(s.year, C.START_YEAR, C.END_YEAR) - C.START_YEAR;
-    return C.VILLAGE_EMISSION * Math.pow(1 - C.GRID_DECARB, yrs) * emissionFactor(s);
+    return diffOf(s).emission * Math.pow(1 - C.GRID_DECARB, yrs) * emissionFactor(s);
   }
 
   function metrics(s) {
@@ -392,7 +396,7 @@
     }
     if (c.cost) s.budget = r1(s.budget - c.cost);
     s.stats.actions[id] = (s.stats.actions[id] || 0) + 1;
-    return { ok: true, msg: msg, cost: c.cost, tool: id, index: i };
+    return { ok: true, msg: msg, cost: c.cost, tool: id, index: i, missions: checkMissions(s) };
   }
 
   /* ---------- 카드가 쓰는 도우미 ---------- */
@@ -473,7 +477,7 @@
       if (card.heat) s.heat = true;
       if (opt.apply) opt.apply(s, api);
     }
-    s.decisions.push({ year: s.year, card: card.id, title: card.title, choice: opt.label, council: card.options.length > 1 });
+    s.decisions.push({ year: s.year, card: card.id, title: card.title, choice: opt.label, opt: card.blocked ? -1 : card.options.indexOf(opt), council: card.options.length > 1 && !card.blocked });
     s.card = null;
     return opt;
   }
@@ -509,7 +513,7 @@
 
   /* ---------- 태풍 ---------- */
   function typhoon(s, S, m) {
-    var base = 3 + 3 * S;
+    var base = (3 + 3 * S) * diffOf(s).typhoon;
     var P = 0;
     BUFFER.forEach(function (i) {
       var t = s.tiles[i];
@@ -522,7 +526,7 @@
     var exposed = 0.5 * m.dev;
     var damage = r1(base * (1 - red) + exposed);
     var noBuffer = r1(base + exposed);
-    return { strength: S, base: base, protection: r1(P), reduction: Math.round(red * 100), damage: damage, noBuffer: noBuffer };
+    return { strength: S, base: r1(base), protection: r1(P), reduction: Math.round(red * 100), damage: damage, noBuffer: noBuffer };
   }
 
   /* ---------- 경제 ---------- */
@@ -545,7 +549,8 @@
     var base = 3;
     var upkeep = 0.05 * m.walls;
     var damage = rep && rep.typhoon ? rep.typhoon.damage : 0;
-    var net = base + fishery + aqua + farm + tourism + dev + energy + pes - upkeep - damage;
+    var gross = (base + fishery + aqua + farm + tourism + dev + energy + pes) * diffOf(s).income;
+    var net = gross - upkeep - damage;
     return {
       base: base, fishery: r1(fishery), aqua: r1(aqua), farm: r1(farm), tourism: r1(tourism),
       dev: r1(dev), energy: r1(energy), pes: r1(pes), upkeep: r1(upkeep), damage: r1(damage), net: r1(net)
@@ -628,7 +633,7 @@
       s.pendingTyphoon = 0;
     }
 
-    var nd = 2 - (s.policies.ecoBuoy ? 1 : 0) - (s.policies.cleanupDay ? 1 : 0) + (rep.typhoon ? 3 : 0);
+    var nd = 2 + diffOf(s).debris - (s.policies.ecoBuoy ? 1 : 0) - (s.policies.cleanupDay ? 1 : 0) + (rep.typhoon ? 3 : 0);
     nd = Math.min(nd, 24 - mNow.debris);
     if (nd > 0) rep.newDebris = placeDebris(s, nd);
 
@@ -645,6 +650,7 @@
     var inc = income(s, m, rep);
     rep.income = inc;
     s.budget = r1(s.budget + inc.net);
+    rep.missions = checkMissions(s, m);
 
     var ds = rep.discoveries.length + rep.returned.length - rep.lost.length;
     if (m.debris > 12) ds -= 1;
@@ -748,12 +754,211 @@
     return lines.join('\n');
   }
 
+  /* ---------- 미션 ---------- */
+  var MISSION = {};
+  BV.MISSIONS.forEach(function (d) { MISSION[d.id] = d; });
+
+  function nextMission(s) {
+    for (var k = 0; k < BV.MISSIONS.length; k++) {
+      var id = BV.MISSIONS[k].id;
+      if (s.missions.active.indexOf(id) < 0 && s.missions.done.indexOf(id) < 0) return id;
+    }
+    return null;
+  }
+  function checkMissions(s, m) {
+    if (!s.missions) return [];
+    m = m || metrics(s);
+    var done = [];
+    for (var guard = 0; guard < 20; guard++) {
+      var hit = -1;
+      for (var k = 0; k < s.missions.active.length; k++) {
+        var def = MISSION[s.missions.active[k]];
+        if (def && def.metric(s, m) >= def.goal) { hit = k; break; }
+      }
+      if (hit < 0) break;
+      var d = MISSION[s.missions.active[hit]];
+      if (d.reward[0] === 'budget') api.budget(s, d.reward[1]); else api.support(s, d.reward[1]);
+      s.missions.done.push(d.id);
+      done.push(d.id);
+      var nx = nextMission(s);
+      if (nx) s.missions.active[hit] = nx; else s.missions.active.splice(hit, 1);
+    }
+    return done;
+  }
+  function missionStatus(s) {
+    if (!s.missions) return [];
+    var m = metrics(s);
+    return s.missions.active.map(function (id) {
+      var d = MISSION[id];
+      var v = d.metric(s, m);
+      return { id: id, def: d, value: v, goal: d.goal, frac: Math.max(0, Math.min(1, v / d.goal)) };
+    });
+  }
+
+  /* ---------- 업적 ---------- */
+  function checkAchievements(s, ctx) {
+    ctx = ctx || {};
+    var m = metrics(s);
+    var out = [];
+    function add(id, ok) { if (ok) out.push(id); }
+    add('a_first', (s.stats.actions.marsh || 0) >= 1);
+    add('a_wall', m.walls === 0);
+    add('a_clean', m.debris === 0);
+    add('a_shield', !!(s.lastReport && s.lastReport.typhoon && s.lastReport.typhoon.reduction >= 70));
+    add('a_spoonbill', s.present.indexOf('spoonbill') >= 0);
+    add('a_porpoise', s.present.indexOf('porpoise') >= 0);
+    add('a_codex', Object.keys(s.seen).length >= BV.SPECIES.length);
+    add('a_support', s.support >= 80);
+    if (s.ended) {
+      var ev = evaluate(s);
+      add('a_neutral', ev.neutrality >= 1);
+      add('a_nodev', s.stats.developed === 0 && ev.dev === 0);
+      add('a_hard', s.diff === 'hard' && ev.key === 'bluecarbon');
+    }
+    add('a_endings', (ctx.endingsSeen || 0) >= 3);
+    return out;
+  }
+
+  /* ---------- 결과 코드 (교사용 학급 리포트) ---------- */
+  var B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+  var ENDING_KEYS = ['bluecarbon', 'revived', 'grey', 'neglect', 'lonely', 'half'];
+  var DIFF_KEYS = ['easy', 'normal', 'hard'];
+  var CODE_FIELDS = [['cls', 16], ['diff', 2], ['ending', 3], ['neutral', 9], ['species', 4], ['support', 7], ['eco', 8], ['dev', 6], ['net10', 14]]
+    .concat(BV.COUNCIL_ORDER.map(function (id) { return ['c_' + id, 2]; }));
+
+  function encodeResult(s) {
+    var ev = evaluate(s);
+    var vals = {
+      cls: hashStr(s.code) & 0xffff,
+      diff: Math.max(0, DIFF_KEYS.indexOf(s.diff || 'normal')),
+      ending: ENDING_KEYS.indexOf(ev.key),
+      neutral: clamp(Math.round(ev.neutrality * 100), 0, 511),
+      species: clamp(ev.species, 0, 15),
+      support: clamp(s.support, 0, 127),
+      eco: clamp(ev.eco, 0, 255),
+      dev: clamp(ev.dev, 0, 63),
+      net10: clamp(Math.round(Math.max(0, ev.cumNet) / 10), 0, 16383)
+    };
+    BV.COUNCIL_ORDER.forEach(function (id) {
+      var d = null;
+      for (var k = 0; k < s.decisions.length; k++) if (s.decisions[k].card === id) d = s.decisions[k];
+      vals['c_' + id] = d && d.opt >= 0 ? d.opt + 1 : 0;
+    });
+    var big = BigInt(0);
+    var bits = 0;
+    CODE_FIELDS.forEach(function (f) { big = (big << BigInt(f[1])) | BigInt(vals[f[0]]); bits += f[1]; });
+    var chk = Number(big % BigInt(251));
+    big = (big << BigInt(8)) | BigInt(chk);
+    bits += 8;
+    var out = '';
+    for (var n = Math.ceil(bits / 5); n > 0; n--) { out = B32[Number(big & BigInt(31))] + out; big = big >> BigInt(5); }
+    return 'BV1-' + out.match(/.{1,5}/g).join('-');
+  }
+
+  function decodeResult(str) {
+    var m = /BV1-([0-9A-Z-]{20,40})/i.exec(String(str || ''));
+    if (!m) return null;
+    var body = m[1].toUpperCase().replace(/-/g, '').replace(/O/g, '0').replace(/[IL]/g, '1');
+    var big = BigInt(0);
+    for (var k = 0; k < body.length; k++) {
+      var v = B32.indexOf(body[k]);
+      if (v < 0) return null;
+      big = (big << BigInt(5)) | BigInt(v);
+    }
+    var chk = Number(big & BigInt(255));
+    big = big >> BigInt(8);
+    if (Number(big % BigInt(251)) !== chk) return null;
+    var out = {};
+    for (var f = CODE_FIELDS.length - 1; f >= 0; f--) {
+      var w = CODE_FIELDS[f][1];
+      out[CODE_FIELDS[f][0]] = Number(big & BigInt((1 << w) - 1));
+      big = big >> BigInt(w);
+    }
+    var choices = {};
+    BV.COUNCIL_ORDER.forEach(function (id) { choices[id] = out['c_' + id] - 1; });
+    return {
+      code: m[0].toUpperCase(), cls: out.cls, diff: DIFF_KEYS[out.diff] || 'normal', ending: ENDING_KEYS[out.ending] || 'half',
+      neutrality: out.neutral / 100, species: out.species, support: out.support, eco: out.eco, dev: out.dev,
+      cumNet: out.net10 * 10, choices: choices
+    };
+  }
+
+  /* ---------- 자동 플레이 (타이틀 데모 · 예시 학급 데이터) ---------- */
+  var STYLE_PREF = {
+    eco: ['eco', 'energy', 'people', 'none', 'dev'],
+    dev: ['dev', 'none', 'people', 'energy', 'eco'],
+    idle: ['none', 'people', 'eco', 'energy', 'dev']
+  };
+  function autoChoose(s, style) {
+    var card = currentCard(s);
+    if (!card) return null;
+    var idx = 0;
+    if (card.options.length > 1 && !card.blocked) {
+      if (style === 'mid') idx = Math.floor(Math.random() * card.options.length);
+      else {
+        var pref = STYLE_PREF[style] || STYLE_PREF.eco;
+        var best = 99;
+        card.options.forEach(function (o, k) {
+          var r = pref.indexOf(o.tag || 'none');
+          if (r >= 0 && r < best) { best = r; idx = k; }
+        });
+      }
+    }
+    return choose(s, idx);
+  }
+  function autoActions(s, style) {
+    var done = [];
+    function use(tool, filter, limit) {
+      var n = 0;
+      var list = eligible(s, tool);
+      for (var k = 0; k < list.length && n < limit; k++) {
+        var i = list[k];
+        if (filter && !filter(s.tiles[i], i)) continue;
+        var r = apply(s, tool, i);
+        if (r.ok) { n++; done.push({ tool: tool, index: i, missions: r.missions }); } else if (r.money) break;
+      }
+    }
+    var buf = {};
+    BUFFER.forEach(function (i) { buf[i] = 1; });
+    if (style === 'eco') {
+      use('cleanup', null, 4);
+      use('marsh', function (t, i) { return buf[i]; }, 3);
+      use('openwall', null, 1);
+      use('restore', null, 3);
+      use('marsh', null, 2);
+      if (s.wq >= 50) use('seagrass', null, 2);
+      if ((s.stats.actions.boardwalk || 0) < 3) use('boardwalk', null, 1);
+    } else if (style === 'mid') {
+      use('cleanup', null, 2);
+      use('marsh', null, 2);
+      if (s.year % 2 === 0) use('openwall', null, 1);
+      use('restore', null, 1);
+      if (s.wq >= 52) use('seagrass', null, 1);
+    } else if (style === 'dev') {
+      use('develop', null, 2);
+      use('cleanup', null, 1);
+    }
+    return done;
+  }
+  function autoGame(code, style, diff) {
+    var s = newGame(code, diff);
+    for (var guard = 0; guard < 40 && !s.ended; guard++) {
+      if (s.card) autoChoose(s, style);
+      autoActions(s, style);
+      endYear(s);
+    }
+    return s;
+  }
+
   BV.sim = {
     MW: MW, MH: MH, STAGE_NAME: STAGE_NAME, RATE: RATE,
     newGame: newGame, normalizeCode: normalizeCode, metrics: metrics, absorbRate: absorbRate,
     villageEmission: villageEmission, check: check, eligible: eligible, apply: apply, api: api, toolCost: toolCost,
     currentCard: currentCard, choose: choose, endYear: endYear, speciesStatus: speciesStatus,
     describe: describe, evaluate: evaluate, summaryText: summaryText, wqTarget: wqTarget,
-    isTidal: isTidal, isEco: isEco, at: at, noise: noise, hashStr: hashStr, BUFFER: BUFFER
+    isTidal: isTidal, isEco: isEco, at: at, noise: noise, hashStr: hashStr, BUFFER: BUFFER,
+    missionStatus: missionStatus, checkMissions: checkMissions, checkAchievements: checkAchievements,
+    encodeResult: encodeResult, decodeResult: decodeResult, ENDING_KEYS: ENDING_KEYS,
+    autoChoose: autoChoose, autoActions: autoActions, autoGame: autoGame
   };
 })(window.BV = window.BV || {});
