@@ -130,3 +130,48 @@ test('세 스테이지 모두 지도와 보스가 만들어져요', () => {
     for (const [, mix] of st.mix) for (const k of Object.keys(mix)) assert.ok(D.ENEMIES[k], k);
   }
 });
+
+test('무한 모드는 보스를 잡아도 계속되고, 다음 보스가 또 나와요', () => {
+  const s = sim.newRun({ seed: 31, endless: true, meta: { hp: 5, might: 5 } });
+  let killed = false, second = false;
+  while (s.t < 520) {
+    if (s.mode === 'levelup') { sim.choose(s, sim.botChoose(s)); continue; }
+    if (s.mode === 'chest') { sim.closeChest(s); continue; }
+    assert.equal(s.mode, 'play');
+    s.p.hp = s.p.maxHp; s.p.inv = 1;
+    if (s.boss && !killed) { sim.hitEnemy(s, s.boss, 1e9, 0, 0, 'test'); killed = true; }
+    sim.step(s, C.DT, sim.bot(s));
+    s.fx.length = 0;
+    if (killed && s.boss) { second = true; break; }
+  }
+  assert.ok(killed, '첫 보스');
+  assert.equal(s.bossKills, 1);
+  assert.ok(second, '두 번째 보스');
+  assert.ok(s.boss.maxHp > D.ENEMIES[s.stage.boss].hp * 1.5, '두 번째 보스는 더 튼튼해요');
+});
+
+test('별 등급이 오르면 몬스터 체력과 진주가 늘어요', () => {
+  const a = sim.newRun({ seed: 33, star: 1 }), b = sim.newRun({ seed: 33, star: 3 });
+  const ea = sim.spawnEnemy(a, 'foam', 0, 0), eb = sim.spawnEnemy(b, 'foam', 0, 0);
+  assert.ok(eb.maxHp > ea.maxHp * 1.6);
+  a.kills = b.kills = 500; a.carbon = b.carbon = 3000; a.t = b.t = 200;
+  assert.ok(sim.results(b).pearls > sim.results(a).pearls * 1.5);
+});
+
+test('바다 열돔의 열 고리는 닿으면 다치고, 지나간 산호를 하얗게 만들어요', () => {
+  const s = sim.newRun({ stage: 5, seed: 35 });
+  for (let i = 0; i < s.map.tiles.length; i++) if (s.map.tiles[i] === GS.TILE.DIRTY) s.map.tiles[i] = GS.TILE.MARSH;
+  const marsh0 = s.map.tiles.filter(t => t === GS.TILE.MARSH).length;
+  s.p.inv = 0;
+  s.hrings.push({ x: s.p.x - 100, y: s.p.y, r: 60, spd: 165, max: 440, dmg: 20, hit: false, dead: false });
+  const hp0 = s.p.hp;
+  for (let k = 0; k < 120; k++) { sim.step(s, C.DT, { x: 0, y: 0 }); s.fx.length = 0; if (s.mode !== 'play') break; }
+  assert.ok(s.p.hp < hp0, '열 고리에 다쳐요');
+  assert.ok(s.map.tiles.filter(t => t === GS.TILE.MARSH).length < marsh0, '산호가 하얗게 변해요');
+});
+
+test('새 캐릭터 점박이물범은 물범 공으로 시작해요', () => {
+  const s = sim.newRun({ char: 'seal', seed: 37 });
+  assert.equal(s.weapons[0].id, 'ball');
+  assert.equal(s.ch.name, '점박이물범');
+});

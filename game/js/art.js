@@ -73,18 +73,86 @@
   function def(name, u, frames, fn, ol) { M[name] = { u, frames, fn, ol }; }
 
   // 플레이어·친구 생물
-  def('crab', 2.1, 2, f => {
-    const v = new V(15, 9, 8);
-    const L = '#5c5a34';
-    for (const lx of [1, 13]) for (let k = 0; k < 3; k++) v.set(lx, 2 + k * 2 + (f && lx === 1 ? 1 : 0), 0, L).set(lx, 2 + k * 2 + (f && lx === 1 ? 1 : 0), 1, L);
-    v.box(2, 1, 1, 12, 7, 3, (x, y, z) => z === 3 ? (H(x, y, z) < 0.2 ? '#7d8450' : '#a2a86c') : '#8a9058');
-    v.del((x, y, z) => (x === 2 || x === 12) && (y === 1 || y === 7) && z >= 2);
-    v.box(3, 7, 1, 11, 7, 1, '#c9c08a');
-    v.box(5, 6, 4, 5, 6, 6, '#6e6a3c').box(9, 6, 4, 9, 6, 6, '#6e6a3c');
-    v.set(5, 6, 7, '#111').set(9, 6, 7, '#111');
-    const cz = f ? 2 : 1;
-    v.box(0, 5, cz, 2, 8, cz + 1, '#ead9a6').set(0, 8, cz + 2, '#fff4d4').set(1, 8, cz + 2, '#fff4d4');
-    v.box(12, 5, cz, 14, 8, cz + 1, '#ead9a6').set(14, 8, cz + 2, '#fff4d4').set(13, 8, cz + 2, '#fff4d4');
+  def('crab', 1.8, 2, f => {
+    const v = new V(16, 11, 12);
+    const LEG = '#6f7a3c', SHELL = '#b3c072', TOP = '#c6d184', DOT = '#97a55a', BELLY = '#f4e7c3', CLAW = '#f6e2ad', TIP = '#fff6dc';
+    for (const lx of [1, 14]) for (const ly of [3, 5, 7]) { const dy = f && lx === 1 && ly === 5 ? 1 : 0; v.box(lx, ly + dy, 0, lx, ly + dy, 1, LEG); }
+    v.ell(8, 5.4, 3.4, 6.4, 4.6, 3.3, (x, y, z) => {
+      if (z <= 2 && y >= 8) return BELLY;
+      if (z >= 5) return H(x, y, z, 61) < 0.1 ? DOT : TOP;
+      return SHELL;
+    });
+    v.box(5, 7, 6, 5, 7, 7, SHELL).box(10, 7, 6, 10, 7, 7, SHELL);
+    for (const [x0, inner] of [[4, 1], [9, 0]]) {
+      v.box(x0, 7, 8, x0 + 2, 8, 10, '#ffffff');
+      const px = x0 + inner;
+      v.set(px, 8, 8, '#161616').set(px + 1, 8, 8, '#161616').set(px, 8, 9, '#161616').set(px + 1, 8, 9, inner ? '#ffffff' : '#161616');
+      if (!inner) v.set(px, 8, 9, '#ffffff');
+    }
+    v.face(3, 3, '#ff9fb0').face(4, 3, '#ffb7c4').face(12, 3, '#ff9fb0').face(11, 3, '#ffb7c4');
+    v.face(7, 2, '#5b3a2a').face(9, 2, '#5b3a2a').face(8, 1, '#5b3a2a');
+    v.box(0, 6, 1, 2, 9, 3, CLAW).box(0, 8, 4, 1, 9, 4, TIP);
+    const rz = f ? 3 : 1;
+    v.box(13, 6, rz, 15, 9, rz + 2, CLAW).box(14, 8, rz + 3, 15, 9, rz + 3, TIP);
+    if (f) v.box(13, 7, 1, 13, 7, 2, SHELL);
+    return v;
+  });
+  def('seal', 1.7, 2, f => {
+    const v = new V(19, 9, 14);
+    const BODY = '#d4dbe0', SPOT = '#6f7d87', HEAD = '#e2e8eb', FL = '#a7b2b9';
+    v.ell(8.5, 4.5, 3, 7.6, 3.8, 3, (x, y, z) => z <= 1 ? '#eef2f4' : (H(x, y, z, 71) < 0.13 && z >= 3 ? SPOT : BODY));
+    v.ell(14, 4.6, 5.4, 3.7, 3.6, 3.5, (x, y, z) => (H(x, y, z, 72) < 0.07 && z >= 7 ? SPOT : HEAD));
+    const tz = f ? 2 : 1;
+    v.box(0, 3, tz, 1, 6, tz + 1, FL).set(0, 2, tz + 1, FL).set(0, 7, tz + 1, FL);
+    const fz = f ? 1 : 0;
+    v.box(9, 7, fz, 11, 8, fz + 1, FL);
+    v.face(12, 6, '#141414').face(13, 6, '#141414').face(12, 7, '#141414').face(13, 7, '#ffffff');
+    v.face(15, 6, '#141414').face(16, 6, '#141414').face(15, 7, '#ffffff').face(16, 7, '#141414');
+    v.face(11, 5, '#ffb3c0').face(17, 5, '#ffb3c0');
+    v.face(14, 5, '#3a3a3a');
+    v.face(13, 4, '#f6f8f9').face(14, 4, '#f6f8f9').face(15, 4, '#f6f8f9');
+    v.face(14, 3, '#5b4a4a');
+    const segs = ['#ff5a5a', '#ffffff', '#3a8fd1', '#ffd23f'];
+    for (let x = 12; x <= 15; x++) for (let y = 3; y <= 6; y++) for (let z = 9; z <= 12; z++) {
+      const ex = x === 12 || x === 15, ey = y === 3 || y === 6, ez = z === 9 || z === 12;
+      if ((ex && ey) || (ex && ez) || (ey && ez)) continue;
+      v.set(x, y, z, z === 12 ? '#ffffff' : segs[(x + (f ? 1 : 0)) % 4]);
+    }
+    return v;
+  });
+  def('ball', 1.6, 2, f => {
+    const v = new V(7, 7, 7);
+    const segs = ['#ff5a5a', '#ffffff', '#3a8fd1', '#ffffff', '#ffd23f', '#ffffff'];
+    v.ell(3.5, 3.5, 3.5, 3.5, 3.5, 3.5, (x, y, z) => {
+      if (z >= 6) return '#ffffff';
+      const a = Math.atan2(y + 0.5 - 3.5, x + 0.5 - 3.5) + Math.PI + f * 0.52;
+      return segs[Math.floor(a / (Math.PI * 2) * 6) % 6];
+    });
+    return v;
+  });
+  def('seahorse', 1.6, 2, f => {
+    const v = new V(7, 5, 13);
+    const O = '#ffaa3c', L = '#ffd28a';
+    v.ell(3.5, 2.5, 6.5, 2.2, 2, 2.8, (x, y, z) => y >= 3 ? L : O);
+    v.ell(3.8, 2.5, 10, 2, 1.8, 1.8, O);
+    v.box(5, 2, 10, 6, 2, 10, O);
+    v.set(4, 4, 11, '#161616');
+    v.set(2, 2, 12, '#ff7a3c').set(3, 2, 12, '#ff7a3c');
+    const tz = [3, 2, 1, 1, 2];
+    const tx = f ? [3, 3, 4, 5, 5] : [3, 2, 2, 3, 4];
+    for (let i = 0; i < 5; i++) v.set(tx[i], 2, tz[i] - (i === 3 ? 1 : 0), O);
+    v.set(1, 2, 7, '#ffe0a0');
+    return v;
+  });
+  def('nakji', 1.6, 2, f => {
+    const v = new V(9, 9, 9);
+    v.ell(4.5, 4.5, 5.6, 3, 2.8, 3, (x, y, z) => z >= 7 ? '#d2765c' : '#c0684f');
+    for (let k = 0; k < 6; k++) {
+      const a = k / 6 * Math.PI * 2 + (f ? 0.3 : 0);
+      for (let t = 0; t < 3; t++) v.set(4.5 + Math.cos(a) * (2.4 + t) - 0.5, 4.5 + Math.sin(a) * (2.4 + t) - 0.5, Math.max(0, 2 - t + (t === 2 ? 1 : 0)), t === 2 ? '#e8957a' : '#c0684f');
+    }
+    v.face(3, 5, '#ffffff').face(5, 5, '#ffffff').face(3, 5, '#161616').face(6, 5, '#161616');
+    v.face(4, 3, '#ff9fb0');
     return v;
   });
   def('spoonbill', 1.9, 2, f => {
@@ -259,7 +327,85 @@
     return v;
   });
 
+  def('algae', 2.1, 2, f => {
+    const v = new V(12, 10, 8);
+    v.ell(6, 5, 0.6, 5.9, 4.9, f ? 6 : 6.8, (x, y, z) => {
+      const h = H(x, y, z, 81);
+      return h < 0.1 ? '#a8e070' : h < 0.18 ? '#2f6b2a' : z >= 4 ? '#5fae45' : '#4a9238';
+    });
+    v.face(4, 3, '#f3f3f3').face(7, 3, '#f3f3f3').face(4, 2, '#163016').face(7, 2, '#163016');
+    return v;
+  });
+  def('algaeS', 1.8, 1, () => {
+    const v = new V(8, 7, 5);
+    v.ell(4, 3.5, 0.6, 3.9, 3.4, 4.4, (x, y, z) => H(x, y, z, 82) < 0.15 ? '#a8e070' : z >= 3 ? '#5fae45' : '#4a9238');
+    v.face(3, 2, '#f3f3f3').face(5, 2, '#f3f3f3');
+    return v;
+  });
+  def('tire', 2.0, 2, f => {
+    const v = new V(12, 6, 12);
+    for (let x = 0; x < 12; x++) for (let z = 0; z < 12; z++) {
+      const r = Math.hypot(x + 0.5 - 6, z + 0.5 - 6), a = Math.atan2(z + 0.5 - 6, x + 0.5 - 6);
+      if (r > 5.9 || r < 2.4) continue;
+      const tread = r > 4.6 && Math.floor((a + Math.PI) / (Math.PI / 8) + f) % 2 === 0;
+      v.box(x, 1, z, x, 4, z, r < 3.2 ? '#8a8f94' : tread ? '#3c3c3c' : '#252527');
+    }
+    v.face(4, 7, '#ff5a4a').face(7, 7, '#ff5a4a');
+    return v;
+  });
+  def('starfish', 2.0, 2, f => {
+    const v = new V(13, 13, 4);
+    for (let y = 0; y < 13; y++) for (let x = 0; x < 13; x++) {
+      const dx = x + 0.5 - 6.5, dy = y + 0.5 - 6.5, r = Math.hypot(dx, dy), a = Math.atan2(dy, dx) + (f ? 0.3 : 0);
+      const arm = Math.pow(Math.abs(Math.cos(a * 2.5)), 3);
+      if (r > 2.2 + arm * 4.4) continue;
+      const hh = r < 2.5 ? 3 : 2;
+      for (let z = 0; z < hh; z++) v.set(x, y, z, z === hh - 1 && H(x, y, z, 83) < 0.25 ? '#ffc07a' : '#e2603a');
+    }
+    v.top(5, 7, '#161616').top(8, 7, '#161616');
+    return v;
+  });
+  def('starS', 1.7, 1, () => {
+    const v = new V(9, 9, 3);
+    for (let y = 0; y < 9; y++) for (let x = 0; x < 9; x++) {
+      const dx = x + 0.5 - 4.5, dy = y + 0.5 - 4.5, r = Math.hypot(dx, dy), a = Math.atan2(dy, dx);
+      if (r > 1.6 + Math.pow(Math.abs(Math.cos(a * 2.5)), 3) * 3.2) continue;
+      v.box(x, y, 0, x, y, 1, H(x, y, 1, 84) < 0.25 ? '#ffc07a' : '#e2603a');
+    }
+    v.top(3, 5, '#161616').top(5, 5, '#161616');
+    return v;
+  });
+  def('heat', 2.0, 2, f => {
+    const v = new V(10, 10, 11);
+    v.ell(5, 5, 4, 4.4, 4.2, 4, (x, y, z) => z >= 6 ? '#ffd23f' : z >= 3 ? '#ff9a3c' : '#ff6a3c');
+    for (let k = 0; k < 5; k++) { const x = 2 + k * 1.5, hh = 8 + ((k + f) % 2) * 2; for (let z = 7; z <= hh; z++) v.set(x, 5, z, z === hh ? '#fff3a0' : '#ffb347'); }
+    v.face(3, 4, '#3a1606').face(6, 4, '#3a1606');
+    return v;
+  }, '#7a2a10');
+
   // 보스
+  def('algaeKing', 2.4, 2, f => {
+    const v = new V(24, 20, 18);
+    v.ell(12, 10, 1, 11.5, 9.5, f ? 14 : 15.5, (x, y, z) => {
+      const h = H(x, y, z, 85);
+      return h < 0.08 ? '#c8f08a' : h < 0.16 ? '#2f6b2a' : z >= 9 ? '#6cbf4e' : '#4a9238';
+    });
+    for (let k = 0; k < 6; k++) { const x = 5 + k * 2.6; v.top(x, 6 + (k % 3), '#e8ffb0'); }
+    for (const ex of [7, 14]) { v.face(ex, 9, '#ffffff').face(ex + 1, 9, '#ffffff').face(ex, 10, '#ffffff').face(ex + 1, 10, '#ffffff').face(ex + (ex < 10 ? 1 : 0), 9, '#161616'); }
+    v.face(8, 12, '#1d3a12').face(15, 12, '#1d3a12');
+    for (let x = 9; x <= 14; x++) v.face(x, 6, '#1d3a12');
+    return v;
+  });
+  def('heatDome', 2.4, 2, f => {
+    const v = new V(22, 20, 18);
+    v.ell(11, 10, 6, 10.5, 9.5, 8, (x, y, z) => z >= 10 ? '#ffd23f' : z >= 6 ? '#ff9a3c' : '#ff6a3c');
+    v.del((x, y, z) => z < 1);
+    for (let k = 0; k < 7; k++) { const x = 3 + k * 2.6, hh = 15 + ((k + f) % 3); for (let z = 13; z <= hh; z++) v.set(x, 10, z, z >= hh - 1 ? '#fff6b0' : '#ffb347'); }
+    for (const ex of [6, 13]) { v.face(ex, 9, '#2a1206').face(ex + 1, 9, '#2a1206').face(ex + 2, 9, '#2a1206').face(ex, 10, '#2a1206').face(ex + 1, 10, '#2a1206').face(ex + 2, 10, '#2a1206'); }
+    v.face(9, 10, '#2a1206').face(10, 10, '#2a1206').face(11, 10, '#2a1206').face(12, 10, '#2a1206');
+    v.face(9, 6, '#7a2a10').face(10, 5, '#7a2a10').face(11, 5, '#7a2a10').face(12, 6, '#7a2a10');
+    return v;
+  }, '#7a2a10');
   def('dozer', 2.5, 2, f => {
     const v = new V(25, 18, 17);
     const tr = (x, y, z) => ((x + f) % 2 ? '#3a3a3a' : '#242424');
@@ -406,6 +552,27 @@
     v.box(1, 2, 6, 3, 2, 7, '#7bd36b').box(5, 2, 7, 7, 2, 8, '#7bd36b').set(4, 2, 7, '#4caf50');
     return v;
   });
+  def('moon', 1.6, 1, () => {
+    const v = new V(10, 4, 10);
+    for (let x = 0; x < 10; x++) for (let z = 0; z < 10; z++) {
+      const r = Math.hypot(x + 0.5 - 5, z + 0.5 - 5);
+      if (r <= 4.6) v.box(x, 1, z, x, 2, z, (Math.hypot(x - 3, z - 6) < 1.2 || Math.hypot(x - 6.5, z - 3) < 1) ? '#e2d28a' : '#fff2b3');
+    }
+    return v;
+  });
+  def('kelp', 1.6, 1, () => {
+    const v = new V(8, 5, 12);
+    v.box(0, 0, 0, 7, 4, 0, '#c9b07a');
+    for (const [bx, by, hh, c] of [[2, 2, 11, '#6b8f3a'], [4, 1, 9, '#8aa84a'], [5, 3, 10, '#5a7a30']]) for (let z = 1; z <= hh; z++) v.set(bx + Math.round(Math.sin(z * 0.7 + bx) * 0.8), by, z, z % 3 === 0 ? '#a8c25a' : c);
+    return v;
+  });
+  def('coral', 1.6, 1, () => {
+    const v = new V(9, 6, 10);
+    v.box(1, 1, 0, 7, 4, 0, '#e6d3a1');
+    const br = [[4, 3, 0, 7], [2, 3, 3, 4], [6, 3, 4, 3], [3, 2, 6, 3], [5, 2, 6, 2]];
+    for (const [x, y, z0, hh] of br) for (let z = z0; z < z0 + hh; z++) v.set(x + (z > z0 + 1 ? (x < 4 ? -1 : x > 4 ? 1 : 0) : 0), y, z + 1, z === z0 + hh - 1 ? '#ffb0bc' : '#ff7a8a');
+    return v;
+  });
   def('skull', 1.6, 1, () => {
     const v = new V(7, 5, 7);
     v.ell(3.5, 2.5, 4, 3.4, 2.4, 3, '#f1efe6');
@@ -530,6 +697,21 @@
       litter: false, sheen: true, sky: 'rgba(60,40,20,0.10)',
     },
   };
+  THEMES.estuary = {
+    sea: '#3a6066', sea2: '#4d7a80', creek: '#4b5a3a', creekSheen: ['#6a8a3a', '#3f6a3a'], dirty: '#575843', dirty2: '#474836',
+    mud: '#8f7b5a', mud2: '#a68f6b', hole: '#4a3a28', marshBase: '#6f7f3e', tuft: [['#c9b46a', '#e6d38a'], ['#7da044', '#a8c860']],
+    pool: '#4f98a0', poolGrass: '#4f8f5a', concrete: '#8e8d87', seam: '#7a7973',
+    front: { 2: '#3f402f', 3: '#5f4e36', 4: '#4f4a2c', 6: '#66655f', 1: '#34402a', 5: '#2f7a80' },
+    litter: true, sky: 'rgba(90,100,40,0.07)',
+  };
+  THEMES.reef = {
+    sea: '#0e5f84', sea2: '#1d7ea6', creek: '#1c6e8c', creekSheen: ['#2f8fb0', '#3aa0c0'], dirty: '#d6d2c9', dirty2: '#bdb9b0',
+    mud: '#e3d09e', mud2: '#f1e2b8', hole: '#c9b27e', marshBase: '#d9c48e', tuft: [['#ff7a8a', '#ffb0bc'], ['#b07aff', '#d6b8ff'], ['#ff9a4a', '#ffc58a']],
+    pool: '#2fb3c0', poolGrass: '#3f9a6a', concrete: '#9ea1a3', seam: '#85888a',
+    front: { 2: '#a8a49b', 3: '#bba57a', 4: '#a8925f', 6: '#727578', 1: '#155470', 5: '#1f8a96' },
+    litter: false, bleach: true, beams: true, sky: 'rgba(30,140,200,0.14)',
+  };
+  THEMES.forest.beams = true;
   const TILES = { theme: null, set: {} };
   function cellTex(g, S, base, base2, seed, jit) {
     const n = 8, cs = S / n;
@@ -598,7 +780,7 @@
       } else {
         const n = 4 + Math.floor(R(12) * 2);
         for (let k = 0; k < n; k++) {
-          const [c1, c2] = th.tuft[R(k + 20) < 0.55 ? 0 : 1];
+          const [c1, c2] = th.tuft[Math.min(th.tuft.length - 1, Math.floor(R(k + 20) * th.tuft.length * 0.999))];
           const x = Math.floor(R(k + 30) * 7) * cs, y = Math.floor(R(k + 40) * 5 + 2) * cs, hh = 1 + Math.floor(R(k + 50) * 2.5);
           for (let j = 0; j < hh; j++) cube(g, x + ((j + k) % 2 ? cs * 0.25 : 0), y - j * cs * 0.9, cs * 0.9, j === hh - 1 ? c2 : c1, 0.9);
         }

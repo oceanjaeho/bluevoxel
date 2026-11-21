@@ -44,6 +44,7 @@
     $('codexClose').onclick = () => H.closeCodex();
     $('tabAlly').onclick = () => renderCodex('ally');
     $('tabFoe').onclick = () => renderCodex('foe');
+    $('tabAch').onclick = () => renderCodex('ach');
   }
 
   // ── 타이틀 ────────────────────────────────────────────
@@ -59,6 +60,7 @@
     $('charName').textContent = ok ? ch.name : '???';
     $('charTag').innerHTML = ok ? ch.tag + ' · ' + D.WEAPONS[ch.weapon].name : LOCK + ' ' + ch.unlock.text;
     $('charCard').classList.toggle('locked', !ok);
+    $('charCard').classList.toggle('long', ok && ch.name.length > 3);
     const st = $('stages');
     st.innerHTML = '';
     for (const s of D.STAGES) {
@@ -68,11 +70,32 @@
       b.onclick = () => H.pickStage(s.id);
       st.appendChild(b);
     }
+    const sid = 's' + meta.stage;
+    const cleared = (meta.stars && meta.stars[sid]) || 0, unl = Math.min(D.STARS.max, cleared + 1);
+    const sel = Math.min(unl, (meta.starSel && meta.starSel[sid]) || 1);
+    const mods = $('mods');
+    mods.innerHTML = '';
+    for (let k = 1; k <= D.STARS.max; k++) {
+      const b = el('button', 'star', '★' + (k > 1 ? k : ''));
+      b.setAttribute('aria-label', `난이도 별 ${k}개`);
+      b.setAttribute('aria-pressed', String(k === sel && !meta.endless));
+      b.disabled = k > unl;
+      b.onclick = () => H.pickStar(k);
+      mods.appendChild(b);
+    }
+    const best = meta.best && meta.best[sid];
+    if (best && best.win) {
+      const e = el('button', 'endless', '무한');
+      e.setAttribute('aria-pressed', String(!!meta.endless));
+      e.onclick = () => H.toggleEndless();
+      mods.appendChild(e);
+    }
     const play = $('playBtn');
     play.disabled = !ok;
-    play.textContent = ok ? '출동!' : '잠겨 있어요';
-    const best = meta.best && meta.best['s' + meta.stage];
-    $('best').textContent = best ? `최고 ${U.fmtTime(best.time)} · ${U.fmtNum(best.carbon)}t${best.win ? ' · 클리어' : ''}` : '';
+    play.textContent = ok ? (meta.endless && best && best.win ? '무한 출동!' : '출동!') : '잠겨 있어요';
+    const eb = meta.endlessBest && meta.endlessBest[sid];
+    $('best').textContent = meta.endless && best && best.win ? (eb ? `무한 최고 ${U.fmtTime(eb)}` : '보스가 계속 나와요. 얼마나 버틸까요?')
+      : best ? `최고 ${U.fmtTime(best.time)} · ${U.fmtNum(best.carbon)}t${cleared ? ' · ★' + cleared + ' 클리어' : ''}` : '';
     $('pearls').textContent = U.fmtNum(meta.pearls || 0);
     const snd = meta.settings.sfx || meta.settings.music;
     $('soundBtn').setAttribute('aria-pressed', String(snd));
@@ -251,9 +274,10 @@
   function openResult(s, r, extra) {
     const panel = $('result').querySelector('.panel');
     panel.classList.toggle('win', r.win);
-    $('resTitle').textContent = r.win ? '갯벌을 지켰어요!' : s.quit ? '여기까지!' : '쓰러졌어요';
+    $('resTitle').textContent = r.win ? '갯벌을 지켰어요!' : r.endless ? `${U.fmtTime(r.time)} 버텼어요` : s.quit ? '여기까지!' : '쓰러졌어요';
     const stage = D.STAGES.find(x => x.id === r.stage);
-    $('resSub').textContent = r.win ? `${stage.name} 클리어` : r.killedBy && D.ENEMIES[r.killedBy] ? `${D.ENEMIES[r.killedBy].name}에게 당했어요` : `${stage.name} ${U.fmtTime(r.time)}`;
+    const tag = r.endless ? `무한 · 보스 ${r.bossKills}마리` : '★' + r.star;
+    $('resSub').textContent = r.win ? `${stage.name} ${tag} 클리어` : r.killedBy && D.ENEMIES[r.killedBy] ? `${tag} · ${D.ENEMIES[r.killedBy].name}에게 당했어요` : `${stage.name} ${tag}`;
     drawMini($('mapBefore'), s.map.tiles0);
     drawMini($('mapAfter'), s.map.tiles);
     $('resPct').textContent = '복원 ' + Math.round(r.restored * 100) + '%';
@@ -263,8 +287,9 @@
     add(U.fmtTime(r.time), '시간'); add('Lv ' + r.level, '레벨'); add(U.fmtNum(r.kills), '처치'); add(U.fmtNum(r.carbon) + 't', '블루카본', 'c');
     $('newBest').hidden = !extra.newBest;
     const un = $('resUnlock');
-    un.hidden = !extra.unlocks.length;
-    un.textContent = extra.unlocks.join(' · ');
+    const lines = extra.unlocks.concat((extra.achs || []).map(a => `업적 ${a.name} +${a.reward}`));
+    un.hidden = !lines.length;
+    un.textContent = lines.join(' · ');
     let key = r.killedBy && D.FACTS[r.killedBy] ? r.killedBy : r.mvp && D.FACTS[r.mvp] ? r.mvp : r.char;
     if (r.win) key = s.stage.boss;
     if (Math.random() < 0.15) key = 'getbol';
@@ -311,10 +336,21 @@
     }
     return Object.keys(D.ENEMIES).map(k => ({ id: k, name: D.ENEMIES[k].name, icon: D.ENEMIES[k].model }));
   }
+  function renderAch() {
+    const box = $('achList');
+    box.innerHTML = '';
+    const done = meta.ach || {};
+    for (const a of D.ACH) box.appendChild(el('div', 'ach' + (done[a.id] ? ' done' : ''), `<b>${a.name}</b><span>${a.d}</span><em>${done[a.id] ? '달성' : '+' + a.reward}</em>`));
+    $('codexCount').textContent = `${D.ACH.filter(a => done[a.id]).length} / ${D.ACH.length}`;
+  }
   function renderCodex(tab) {
     codexTab = tab || codexTab;
     $('tabAlly').setAttribute('aria-selected', String(codexTab === 'ally'));
     $('tabFoe').setAttribute('aria-selected', String(codexTab === 'foe'));
+    $('tabAch').setAttribute('aria-selected', String(codexTab === 'ach'));
+    const isAch = codexTab === 'ach';
+    $('achList').hidden = !isAch; $('codexGrid').hidden = isAch; $('codexDetail').hidden = isAch;
+    if (isAch) { renderAch(); return; }
     const list = codexEntries(codexTab);
     const seen = meta.codex || {};
     const all = codexEntries('ally').concat(codexEntries('foe'));

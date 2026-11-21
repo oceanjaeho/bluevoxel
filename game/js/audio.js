@@ -6,7 +6,7 @@
   const st = { sfx: true, music: true };
   const last = {};
   let combo = 0, comboT = 0;
-  const THR = { hit: 0.035, kill: 0.03, gem: 0.022, shoot: 0.07, sweep: 0.08, splash: 0.06, dash: 0.12, erupt: 0.05, jump: 0.12,
+  const THR = { boing: 0.05, pop: 0.04, bubble: 0.15, ink: 0.2, hit: 0.035, kill: 0.03, gem: 0.022, shoot: 0.07, sweep: 0.08, splash: 0.06, dash: 0.12, erupt: 0.05, jump: 0.12,
     mine: 0.2, pave: 0.12, emit: 0.3, bloom: 0.3, hurt: 0.1, drip: 0.08, bolt: 0.1, slam: 0.05 };
 
   function init() {
@@ -135,6 +135,12 @@
       case 'storm': nz({ dur: 3, vol: 0.08, f: 500, f2: 900, q: 0.5, a: 1 }); break;
       case 'revive': [0, 7, 12, 19, 24].forEach((n, i) => tone({ f: N(67 + n), type: 'triangle', t: i * 0.07, dur: 0.5, vol: 0.08 })); break;
       case 'magnet': tone({ f: 300, f2: 1200, dur: 0.4, vol: 0.07 }); break;
+      case 'boing': tone({ f: 330, f2: 660, dur: 0.12, vol: 0.06 }); break;
+      case 'pop': tone({ f: 1200, f2: 1800, dur: 0.05, vol: 0.04 }); break;
+      case 'bubble': for (let i = 0; i < 3; i++) tone({ f: 700 + i * 220, f2: 1100 + i * 220, t: i * 0.04, dur: 0.06, vol: 0.025 }); break;
+      case 'ink': nz({ dur: 0.18, vol: 0.07, ft: 'lowpass', f: 600, f2: 200 }); break;
+      case 'heatPulse': nz({ dur: 0.7, vol: 0.12, ft: 'lowpass', f: 300, f2: 1400 }); tone({ f: 110, f2: 70, type: 'sawtooth', dur: 0.6, vol: 0.06, lp: 600 }); break;
+      case 'bloomBoss': nz({ dur: 0.4, vol: 0.1, ft: 'lowpass', f: 500, f2: 150 }); tone({ f: 90, f2: 50, dur: 0.35, vol: 0.14 }); break;
       case 'start': [0, 7, 12].forEach((n, i) => tone({ f: N(60 + n), type: 'square', t: i * 0.08, dur: 0.2, vol: 0.06, lp: 2400 })); break;
     }
   }

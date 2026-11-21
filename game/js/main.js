@@ -7,12 +7,14 @@
   const $ = id => document.getElementById(id);
 
   const DEF = () => ({ pearls: 0, up: {}, unlocked: {}, cleared: 0, best: {}, totalKills: 0, bestTime: 0, codex: { crab: 1, claw: 1 },
-    runs: 0, tips: {}, settings: { sfx: true, music: true, shake: true, dmg: true }, char: 'crab', stage: 1 });
+    runs: 0, tips: {}, settings: { sfx: true, music: true, shake: true, dmg: true }, char: 'crab', stage: 1,
+    stars: {}, starSel: {}, endless: false, endlessBest: {}, ach: {} });
   function loadMeta() {
     try { const v = JSON.parse(root.localStorage.getItem(KEY) || 'null'); return v && typeof v === 'object' ? v : null; } catch (e) { return null; }
   }
   const meta = Object.assign(DEF(), loadMeta() || {});
   meta.settings = Object.assign(DEF().settings, meta.settings || {});
+  for (const k of ['stars', 'starSel', 'endlessBest', 'ach', 'best', 'up', 'unlocked', 'codex', 'tips']) if (!meta[k] || typeof meta[k] !== 'object') meta[k] = {};
   function save() { try { root.localStorage.setItem(KEY, JSON.stringify(meta)); } catch (e) { /* 저장이 막힌 곳에서도 게임은 계속돼요 */ } }
 
   let mode = 'title', s = null, demo = null, paused = false, ended = false, endAt = 0, snapCam = true;
@@ -30,6 +32,28 @@
     if (u.kind === 'time') return (meta.bestTime || 0) >= u.v;
     if (u.kind === 'kills') return (meta.totalKills || 0) >= u.v;
     if (u.kind === 'clear') return (meta.cleared || 0) >= u.v;
+    if (u.kind === 'runs') return (meta.runs || 0) >= u.v;
+    return false;
+  }
+  function codexCount() {
+    const ids = new Set([...D.CHARS.map(c => c.id), ...Object.keys(D.WEAPONS), ...Object.keys(D.PASSIVES), ...Object.keys(D.ENEMIES)]);
+    return Object.keys(meta.codex).filter(k => ids.has(k)).length;
+  }
+  function achMet(a, r) {
+    switch (a.kind) {
+      case 'runs': return meta.runs >= a.v;
+      case 'clear': return (meta.cleared || 0) >= a.v;
+      case 'kills': return r.kills >= a.v;
+      case 'evo': return r.evoCount >= a.v;
+      case 'level': return r.level >= a.v;
+      case 'carbon': return r.carbon >= a.v;
+      case 'green': return r.greenMax >= a.v;
+      case 'storm': return r.stormSurvived >= a.v;
+      case 'star': return r.win && r.star >= a.v;
+      case 'endless': return r.endless && r.time >= a.v;
+      case 'chars': return D.CHARS.filter(c => !c.unlock || meta.unlocked[c.id]).length >= a.v;
+      case 'codex': return codexCount() >= a.v;
+    }
     return false;
   }
 
@@ -105,13 +129,14 @@
   // ── 소리와 연출 연결 ───────────────────────────────────
   const SFX = { dmg: 'hit', gem: 'gem', heal: 'heal', levelup: 'level', pick: 'pick', evo: 'evo', chest: 'chest', shoot: 'shoot', drip: 'drip',
     sweep: 'sweep', splash: 'splash', dash: 'dash', erupt: 'erupt', nova: 'nova', jump: 'jump', mine: 'mine', bolt: 'bolt', emit: 'emit',
-    charge: 'charge', slam: 'slam', blast: 'blast', bloom: 'bloom', magnet: 'magnet', revive: 'revive', bosskill: 'bosskill' };
+    charge: 'charge', slam: 'slam', blast: 'blast', bloom: 'bloom', magnet: 'magnet', revive: 'revive', bosskill: 'bosskill',
+    boing: 'boing', pop: 'pop', bubbles: 'bubble', ink: 'ink', toss: 'jump', heatPulse: 'heatPulse', bloomBoss: 'bloomBoss' };
   function sound(e) {
     if (e.k === 'kill') { AU.play(e.boss ? 'bosskill' : 'kill'); return; }
     if (e.k === 'hurt') { AU.play('hurt'); AU.buzz(25); return; }
     if (e.k === 'alert') { AU.play(e.id === 'storm' ? 'storm' : 'warn'); return; }
     if (e.k === 'boss') { AU.play('warn'); AU.play('boss'); AU.music('boss'); return; }
-    if (e.k === 'bosskill') { AU.play('bosskill'); AU.music('off'); return; }
+    if (e.k === 'bosskill') { AU.play('bosskill'); if (e.endless) AU.music('run'); else AU.music('off'); return; }
     if (e.k === 'dead') { AU.play('lose'); AU.music('off'); return; }
     if (e.k === 'won') { AU.play('win'); return; }
     if (e.k === 'stormEnd') return;
@@ -160,7 +185,10 @@
     if (!charOk(meta.char)) { UI.toast('아직 잠겨 있어요'); AU.play('deny'); return; }
     if (!stageOk(meta.stage)) meta.stage = 1;
     AU.unlock(); AU.play('start');
-    s = SIM.newRun({ stage: meta.stage, char: meta.char, meta: meta.up });
+    const sid = 's' + meta.stage, best = meta.best[sid];
+    const endless = !!(meta.endless && best && best.win);
+    const star = Math.min((meta.stars[sid] || 0) + 1, meta.starSel[sid] || 1);
+    s = SIM.newRun({ stage: meta.stage, char: meta.char, meta: meta.up, star: endless ? 1 : star, endless });
     s.view = R.view();
     mode = 'play'; paused = false; ended = false; acc = 0; snapCam = true; tipQ.length = 0; tipAt = 0;
     joyRelease();
@@ -214,6 +242,8 @@
     meta.best[key] = { time: Math.max(b.time, r.time), carbon: Math.max(b.carbon, r.carbon), win: b.win || r.win };
     const firstClear = r.win && (meta.cleared || 0) < r.stage;
     if (r.win) meta.cleared = Math.max(meta.cleared || 0, r.stage);
+    if (r.win) meta.stars[key] = Math.max(meta.stars[key] || 0, r.star);
+    if (r.endless) meta.endlessBest[key] = Math.max(meta.endlessBest[key] || 0, r.time);
     meta.codex[r.char] = 1;
     for (const id of r.seen) meta.codex[id] = 1;
     for (const w of r.build) meta.codex[w.id] = 1;
@@ -221,9 +251,11 @@
     const unlocks = [];
     for (const ch of D.CHARS) if (ch.unlock && !meta.unlocked[ch.id] && unlockMet(ch.unlock)) { meta.unlocked[ch.id] = true; unlocks.push('새 친구 ' + ch.name); }
     if (firstClear && r.stage < D.STAGES.length) unlocks.push('새 스테이지 ' + D.STAGES[r.stage].name);
+    const achs = [];
+    for (const a of D.ACH) if (!meta.ach[a.id] && achMet(a, r)) { meta.ach[a.id] = 1; meta.pearls += a.reward; achs.push(a); }
     save();
     UI.showHud(false); UI.hint(false); hintOn = false;
-    UI.openResult(s, r, { newBest, unlocks });
+    UI.openResult(s, r, { newBest, unlocks, achs });
     setTimeout(() => { if (mode === 'play' && UI.isOpen('result')) AU.music('title'); }, 1600);
   }
 
@@ -246,6 +278,13 @@
     if (!stageOk(id)) { UI.toast(`${D.STAGES[id - 2].name} 스테이지를 먼저 깨면 열려요`); AU.play('deny'); return; }
     meta.stage = id; save(); UI.renderTitle(); AU.play('click'); newDemo();
   }
+  function pickStar(k) {
+    const sid = 's' + meta.stage;
+    if (k > (meta.stars[sid] || 0) + 1) return;
+    meta.starSel[sid] = k; meta.endless = false;
+    save(); UI.renderTitle(); AU.play('click');
+  }
+  function toggleEndless() { meta.endless = !meta.endless; save(); UI.renderTitle(); AU.play('click'); }
   function openShop() { UI.openShop(); AU.play('click'); }
   function closeShop() { UI.show('shop', false); if (mode === 'title') UI.renderTitle(); }
   function openCodex() { UI.openCodex(); AU.play('click'); }
@@ -315,6 +354,7 @@
       return;
     }
     if (mode === 'play' && s) {
+      const t0 = prof.on ? performance.now() : 0;
       if (s.mode === 'play' && !paused) {
         acc += dt;
         let n = 0;
@@ -331,10 +371,13 @@
       if (s.mode === 'chest' && !UI.isOpen('chest')) { joyRelease(); UI.openChest(s); }
       if ((s.mode === 'dead' || s.mode === 'won') && !ended) { ended = true; endAt = now; joyRelease(); }
       if (ended && !s.finished && now - endAt > (s.mode === 'won' ? 900 : 1700)) finishRun();
+      const t1 = prof.on ? performance.now() : 0;
       R.frame(s, dt, { snap: snapCam, noUi: ended });
       snapCam = false;
+      const t15 = prof.on ? performance.now() : 0;
       UI.hud(s, now);
       runTips(now);
+      if (prof.on) { const t2 = performance.now(); prof.sim += t1 - t0; prof.ren += t15 - t1; prof.hud = (prof.hud || 0) + t2 - t15; prof.n++; prof.dts.push(dt * 1000); }
     }
   }
 
@@ -347,7 +390,7 @@
     const reduced = root.matchMedia ? root.matchMedia('(prefers-reduced-motion: reduce)').matches : false;
     R.setOpt({ reduced, shake: meta.settings.shake, dmg: meta.settings.dmg });
     AU.set({ sfx: meta.settings.sfx, music: meta.settings.music });
-    UI.init({ play, choose, reroll, closeChest, pause, resume, quit, again, home, pickChar, pickStage, openShop, closeShop,
+    UI.init({ play, choose, reroll, closeChest, pause, resume, quit, again, home, pickChar, pickStage, pickStar, toggleEndless, openShop, closeShop,
       openCodex, closeCodex, buy, toggleSound, setting, save }, meta);
     bindInput();
     newDemo();
@@ -364,8 +407,10 @@
   }
 
   // 테스트·시연용 손잡이
+  const prof = { on: false, sim: 0, ren: 0, n: 0, dts: [] };
   GS.debug = {
-    get s() { return s; }, get demo() { return demo; }, meta, save,
+    prof,
+    get s() { return s; }, get demo() { return demo; }, get lite() { return liteSet; }, meta, save,
     autopilot(v) { autopilot = !!v; },
     ff(sec) {
       if (!s) return;

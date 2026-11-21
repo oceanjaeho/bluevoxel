@@ -67,7 +67,8 @@
         if (xx >= 0 && yy >= 0 && xx < MW && yy < MH && tiles[yy * MW + xx] !== TL.SEA) { shore[i] = 1; break; }
       }
     }
-    return { tiles, tiles0: tiles.slice(), grow, changed, land, clean, shore };
+    const cw = Math.ceil(MW / 8);
+    return { tiles, tiles0: tiles.slice(), grow, changed, land, clean, shore, cw, dirtyCh: new Uint8Array(cw * Math.ceil(MH / 8)) };
   }
 
   function tileAt(s, x, y) {
@@ -83,6 +84,9 @@
     if (GS.isClean(nt)) m.clean++;
     m.tiles[i] = nt;
     m.changed[i] = s.t;
+    const tx = i % MW, ty = (i / MW) | 0;
+    m.dirtyCh[(ty >> 3) * m.cw + (tx >> 3)] = 1;
+    if (ty > 0) m.dirtyCh[((ty - 1) >> 3) * m.cw + (tx >> 3)] = 1;
     m.grow[i] = nt === TL.MUD ? s.t + (growFast ? U.rnd(s.r, 0.4, 2.2) : U.rnd(s.r, C.GROW_MIN, C.GROW_MAX)) : 0;
   }
 
@@ -139,8 +143,10 @@
     if (st.tick) st.tick *= Math.max(0.7, p.cdMul);
     const a = p.area;
     for (const k of ['rad', 'size', 'area', 'w', 'h']) if (st[k]) st[k] *= (k === 'rad' && def.kind === 'orbit') ? Math.sqrt(a) : a;
-    if (st.spd && (def.kind === 'shoot' || def.kind === 'dash')) st.spd *= p.projSpd;
+    if (st.spd && (def.kind === 'shoot' || def.kind === 'dash' || def.kind === 'bounce' || def.kind === 'homing')) st.spd *= p.projSpd;
     if (st.dist) st.dist *= p.projSpd;
+    if (st.n && def.kind !== 'aura' && def.kind !== 'arc' && def.kind !== 'nova') st.n += p.amount || 0;
+    if (st.life && (def.kind === 'mine' || def.kind === 'cloud' || def.kind === 'homing')) st.life *= p.dur || 1;
     return st;
   }
 
@@ -160,6 +166,9 @@
     p.area = (ch.area || 1) * (1 + 0.08 * L('flow'));
     p.projSpd = 1 + 0.08 * L('flow');
     p.xpMul = (1 + 0.06 * (m.growth || 0)) * (1 + 0.05 * L('plankton'));
+    p.crit = C.CRIT + 0.05 * L('moon');
+    p.dur = 1 + 0.15 * L('kelp');
+    p.amount = (L('coral') >= 3 ? 1 : 0) + (L('coral') >= 5 ? 1 : 0);
     for (const w of s.weapons) w.st = wstat(s, w);
   }
 
@@ -178,7 +187,10 @@
     const r = GS.rng(seed);
     const map = genMap(stage, r);
     const meta = o.meta || {};
+    const star = Math.max(1, Math.min(D.STARS.max, o.star || 1));
     const s = {
+      star, endless: !!o.endless, nextBossAt: stage.bossAt, bossT0: 0, bossKills: 0, evIdx2: 0, evNext: 0,
+      evoCount: 0, stormSurvived: 0, greenMax: 0, hrings: [],
       seed, r, stage, ch, meta, t: 0, mode: 'play', fx: [], nextId: 1, map,
       view: { hw: 440, hh: 260 },
       p: { x: WW / 2, y: WH / 2, r: C.PLAYER.r, hp: 1, maxHp: 0, inv: 1, face: 1, dx: 1, dy: 0, mx: 0, my: 0, moving: false,
@@ -232,7 +244,7 @@
       if (w) w.lv = Math.min(C.MAX_LV, w.lv + 1); else addWeapon(s, c.id);
     } else if (c.k === 'evo') {
       const w = s.weapons.find(x => x.id === c.id);
-      if (w) { w.evo = true; s.fx.push({ k: 'evo', id: c.id }); }
+      if (w) { w.evo = true; s.evoCount++; s.fx.push({ k: 'evo', id: c.id }); }
     } else if (c.k === 'p') {
       s.passives[c.id] = Math.min(C.MAX_LV, (s.passives[c.id] || 0) + 1);
     } else if (c.k === 'heal') {
@@ -295,10 +307,12 @@
   function spawnEnemy(s, type, x, y, o) {
     o = o || {};
     const def = D.ENEMIES[type];
-    const hp = def.boss ? def.hp * (1 + (s.stage.id - 1) * 0.15) : def.hp * s.stage.hpMul * (1 + s.t / 80 + Math.pow(s.t / 240, 2));
+    const sk = s.star - 1;
+    let hp = def.boss ? def.hp * (1 + (s.stage.id - 1) * 0.15) * (1 + s.bossKills * 0.6) : def.hp * s.stage.hpMul * (1 + s.t / 80 + Math.pow(s.t / 240, 2));
+    hp *= 1 + D.STARS.hp * sk;
     const e = {
       id: s.nextId++, type, def, x, y, r: def.r, hp, maxHp: hp, spd: def.spd * U.rnd(s.r, 0.92, 1.08),
-      dmg: def.dmg * s.stage.dmgMul, mass: def.mass, elite: false, boss: !!def.boss, beh: def.beh,
+      dmg: def.dmg * s.stage.dmgMul * (1 + D.STARS.dmg * sk), mass: def.mass, elite: false, boss: !!def.boss, beh: def.beh,
       flash: 0, slowT: 0, slowF: 0, kx: 0, ky: 0, hits: {}, st: {}, dead: false, face: 1,
       ph: s.r() * TAU, pt: 0.45, v: Math.floor(s.r() * 3), born: s.t,
     };
@@ -315,6 +329,12 @@
     for (let i = 0; i < d.length; i++) if (d[i][0] <= t) { a = d[i]; b = d[i + 1] || d[i]; }
     const f = b[0] > a[0] ? U.clamp((t - a[0]) / (b[0] - a[0]), 0, 1) : 0;
     return { min: U.lerp(a[1], b[1], f), iv: U.lerp(a[2], b[2], f), batch: Math.round(U.lerp(a[3], b[3], f)) };
+  }
+  function densFor(s) {
+    const d = densAt(s.stage, s.t);
+    const k = (1 + D.STARS.dens * (s.star - 1)) * (s.endless && s.t > 330 ? 1 + (s.t - 330) / 300 : 1);
+    d.min *= k; d.iv /= Math.sqrt(k);
+    return d;
   }
   function mixAt(st, t) {
     let m = st.mix[0][1];
@@ -333,7 +353,7 @@
 
   function spawnTick(s, dt) {
     if (s.victory) return;
-    const d = densAt(s.stage, s.t);
+    const d = densFor(s);
     const alive = s.enemies.length;
     if (alive >= C.ENEMY_CAP) return;
     s.spawnT -= dt;
@@ -373,7 +393,7 @@
       q.x = U.clamp(q.x, 2 * T, WW - 2 * T); q.y = U.clamp(q.y, -3 * T, WH);
       const b = spawnEnemy(s, s.stage.boss, q.x, q.y);
       b.st.ph = 'walk'; b.st.t = 2.5;
-      s.boss = b;
+      s.boss = b; s.bossT0 = s.t;
       s.fx.push({ k: 'boss', type: b.type });
     }
   }
@@ -403,7 +423,7 @@
 
   function hitEnemy(s, e, dmg, kx, ky, src) {
     if (e.dead) return false;
-    const crit = s.r() < C.CRIT;
+    const crit = s.r() < (s.p.crit || C.CRIT);
     if (crit) dmg *= C.CRIT_MUL;
     e.hp -= dmg;
     if (!e.boss || e.flash < -0.16) e.flash = 0.1;
@@ -450,14 +470,22 @@
       s.fx.push({ k: 'blast', x: e.x, y: e.y });
     }
     s.fx.push({ k: 'kill', x: e.x, y: e.y, type: e.type, elite: e.elite, boss: e.boss, n, src });
-    if (e.boss) startVictory(s, e);
+    if (e.boss) {
+      if (s.endless) {
+        s.bossKills++; s.nextBossAt = s.t + 200; s.enraged = false;
+        s.items.push({ k: 'chest', x: e.x, y: e.y, t: 0, dead: false });
+        restoreAt(s, e.x, e.y, 360, true);
+        s.fx.push({ k: 'bosskill', x: e.x, y: e.y, type: e.type, endless: true });
+      } else startVictory(s, e);
+    }
   }
 
   function startVictory(s, b) {
     s.victory = { t0: s.t, x: b.x, y: b.y, r: 0, tick: 0 };
     s.p.inv = 99;
     s.eshots.length = 0;
-    for (const z of s.zones) z.dead = true;
+    for (const z of s.zones) if (z.k !== 'ink' && z.k !== 'mud') z.dead = true;
+    s.hrings.length = 0;
     s.fx.push({ k: 'bosskill', x: b.x, y: b.y, type: b.type });
   }
 
@@ -671,6 +699,35 @@
         }
         while (s.mines.length > 26) s.mines.shift();
         s.fx.push({ k: 'mine', x: o.x, y: o.y });
+      } else if (kind === 'bounce') {
+        const tgt = nearest(s, o.x, o.y, 480);
+        if (!tgt) { w.t = 0.15; continue; }
+        w.t = st.cd;
+        const cands = s.enemies.filter(e => !e.dead && U.d2(e.x, e.y, o.x, o.y) < 480 * 480);
+        for (let i = 0; i < st.n; i++) {
+          const e = i === 0 ? tgt : (cands.length ? cands[Math.floor(s.r() * cands.length)] : tgt);
+          s.shots.push({ k: 'ball', x: o.x, y: o.y - 6, tid: e.id, tx: e.x, ty: e.y, spd: st.spd, dmg: st.dmg, r: st.size, left: st.bounces,
+            range: st.range, burst: !!st.burst, hit: [], life: 5, src: w.id, spin: 0, dead: false });
+        }
+        s.fx.push({ k: 'toss', x: o.x, y: o.y });
+      } else if (kind === 'homing') {
+        if (!s.enemies.length) { w.t = 0.2; continue; }
+        w.t = st.cd;
+        for (let i = 0; i < st.n; i++) {
+          const a = s.r() * TAU;
+          s.shots.push({ k: 'bubble', x: o.x, y: o.y - 4, vx: Math.cos(a) * st.spd * 0.6, vy: Math.sin(a) * st.spd * 0.6, spd: st.spd, turn: st.turn,
+            dmg: st.dmg, area: st.area, r: 7, life: st.life, src: w.id, dead: false });
+        }
+        s.fx.push({ k: 'bubbles', x: o.x, y: o.y });
+      } else if (kind === 'cloud') {
+        const cands = s.enemies.filter(e => !e.dead && U.d2(e.x, e.y, p.x, p.y) < 320 * 320);
+        if (!cands.length) { w.t = 0.25; continue; }
+        w.t = st.cd;
+        for (let i = 0; i < st.n; i++) {
+          const e = cands[Math.floor(s.r() * cands.length)];
+          s.zones.push({ k: 'ink', x: e.x, y: e.y, r: st.rad, life: st.life, max: st.life, tick: st.tick, tt: 0, dmg: st.dmg, slow: st.slow, pull: !!st.pull, src: w.id, dead: false });
+        }
+        s.fx.push({ k: 'ink', x: o.x, y: o.y });
       } else if (kind === 'nova') {
         w.t = st.cd;
         s.novas.push({ x: p.x, y: p.y, r: 8, max: st.rad, spd: st.rad / 0.55, dmg: st.dmg, push: st.push, hit: [], delay: 0, src: w.id, dead: false });
@@ -704,8 +761,52 @@
         if (q >= 1) {
           sh.dead = true;
           areaHit(s, sh.tx, sh.ty, sh.area, sh.dmg, 120, sh.src);
-          if (sh.puddle) s.zones.push({ k: 'mud', x: sh.tx, y: sh.ty, r: sh.area * 0.9, life: 2.5, max: 2.5, dead: false });
+          if (sh.puddle) s.zones.push({ k: 'mud', x: sh.tx, y: sh.ty, r: sh.area * 0.9, life: 2.5 * (p.dur || 1), max: 2.5 * (p.dur || 1), dead: false });
           s.fx.push({ k: 'splash', x: sh.tx, y: sh.ty, r: sh.area });
+        }
+      } else if (sh.k === 'ball') {
+        let tgt = null;
+        for (const e of s.enemies) if (e.id === sh.tid && !e.dead) { tgt = e; break; }
+        if (tgt) { sh.tx = tgt.x; sh.ty = tgt.y; }
+        const dx = sh.tx - sh.x, dy = sh.ty - sh.y, d = Math.hypot(dx, dy) || 1;
+        const stepL = sh.spd * dt;
+        sh.spin += dt * 14;
+        if (d <= stepL + (tgt ? tgt.r : 0) + sh.r * 0.5) {
+          sh.x = sh.tx; sh.y = sh.ty;
+          if (tgt) {
+            hitEnemy(s, tgt, sh.dmg, dx / d * 90, dy / d * 90, sh.src);
+            sh.hit.push(tgt.id);
+            if (sh.burst) { areaHit(s, sh.x, sh.y, 34, sh.dmg * 0.45, 60, sh.src); s.fx.push({ k: 'pop', x: sh.x, y: sh.y }); }
+            else s.fx.push({ k: 'boing', x: sh.x, y: sh.y });
+          }
+          sh.left--;
+          let nx = null, nd = sh.range * sh.range;
+          if (sh.left >= 0) for (const e of s.enemies) {
+            if (e.dead || sh.hit.indexOf(e.id) >= 0) continue;
+            const dd = U.d2(e.x, e.y, sh.x, sh.y);
+            if (dd < nd) { nd = dd; nx = e; }
+          }
+          if (!nx) { sh.dead = true; continue; }
+          if (sh.hit.length > 6) sh.hit.shift();
+          sh.tid = nx.id; sh.tx = nx.x; sh.ty = nx.y;
+        } else { sh.x += dx / d * stepL; sh.y += dy / d * stepL; }
+      } else if (sh.k === 'bubble') {
+        const tgt = nearest(s, sh.x, sh.y, 360);
+        if (tgt) {
+          const dx = tgt.x - sh.x, dy = tgt.y - sh.y, d = Math.hypot(dx, dy) || 1;
+          sh.vx += (dx / d * sh.spd - sh.vx) * Math.min(1, sh.turn * dt);
+          sh.vy += (dy / d * sh.spd - sh.vy) * Math.min(1, sh.turn * dt);
+        }
+        sh.x += sh.vx * dt; sh.y += sh.vy * dt;
+        s.grid.query(sh.x, sh.y, sh.r + 48, s.near);
+        for (const e of s.near) {
+          if (e.dead) continue;
+          const rr = sh.r + e.r;
+          if (U.d2(sh.x, sh.y, e.x, e.y) > rr * rr) continue;
+          sh.dead = true;
+          areaHit(s, sh.x, sh.y, sh.area, sh.dmg, 70, sh.src);
+          s.fx.push({ k: 'pop', x: sh.x, y: sh.y });
+          break;
         }
       } else if (sh.k === 'dash') {
         if (!sh.back) {
@@ -877,6 +978,59 @@
     } else if (st.ph === 'barrage' && st.t <= 0) { st.ph = 'walk'; st.t = rage ? 3.2 : 4.6; }
   }
 
+  function bossAlgae(s, e, dt, dx, dy) {
+    const st = e.st, p = s.p, rage = e.hp < e.maxHp * 0.5 || s.enraged;
+    st.t -= dt;
+    st.vx = dx * e.spd * (rage ? 1.25 : 1); st.vy = dy * e.spd * (rage ? 1.25 : 1);
+    if (st.t <= 0) {
+      st.t = rage ? 2.6 : 3.6;
+      for (let i = 0; i < 6; i++) { const a = i / 6 * TAU + s.r(); spawnEnemy(s, 'algaeS', e.x + Math.cos(a) * 64, e.y + Math.sin(a) * 64); }
+      for (let i = 0; i < 3; i++) {
+        const q = 0.35 + i * 0.22;
+        s.zones.push({ k: 'algae', x: U.lerp(e.x, p.x, q) + U.rnd(s.r, -60, 60), y: U.lerp(e.y, p.y, q) + U.rnd(s.r, -60, 60), r: 44, life: 7, max: 7, dead: false });
+      }
+      if (rage) for (let i = 0; i < 8; i++) { const a = i / 8 * TAU; s.eshots.push({ k: 'spore', x: e.x, y: e.y, vx: Math.cos(a) * 150, vy: Math.sin(a) * 150, r: 8, dmg: e.dmg * 0.5, life: 4, src: e.type, dead: false }); }
+      s.fx.push({ k: 'bloomBoss', x: e.x, y: e.y });
+    }
+  }
+
+  function bossHeat(s, e, dt, dx, dy, dist) {
+    const st = e.st, rage = e.hp < e.maxHp * 0.5 || s.enraged;
+    st.t -= dt;
+    const radial = dist > 250 ? 1 : -0.7;
+    st.vx = (dx * radial - dy * 0.6) * e.spd; st.vy = (dy * radial + dx * 0.6) * e.spd;
+    if (st.t <= 0) {
+      st.t = rage ? 2.9 : 4.1;
+      st.pulse = (st.pulse || 0) + 1;
+      s.hrings.push({ x: e.x, y: e.y, r: e.r, spd: rage ? 200 : 165, max: 440, dmg: e.dmg * 0.75, hit: false, dead: false });
+      if (st.pulse % 2 === 0) for (let i = 0; i < (rage ? 4 : 3); i++) spawnEnemy(s, 'heat', e.x + U.rnd(s.r, -50, 50), e.y + U.rnd(s.r, -50, 50));
+      s.fx.push({ k: 'heatPulse', x: e.x, y: e.y });
+    }
+  }
+
+  function bleachAt(s, x, y) {
+    const tx = Math.floor(x / T), ty = Math.floor(y / T);
+    if (tx < 0 || ty < 0 || tx >= MW || ty >= MH) return;
+    const i = ty * MW + tx, t = s.map.tiles[i];
+    if (t === TL.MARSH) setTile(s, i, TL.MUD);
+    else if (t === TL.MUD) setTile(s, i, TL.DIRTY);
+    else if (t === TL.POOL) setTile(s, i, TL.CREEK);
+  }
+
+  function updateHeatRings(s, dt) {
+    const p = s.p;
+    for (const h of s.hrings) {
+      if (h.dead) continue;
+      h.r += h.spd * dt;
+      if (h.r >= h.max) { h.dead = true; continue; }
+      for (let k = 0; k < 10; k++) { const a = s.r() * TAU; bleachAt(s, h.x + Math.cos(a) * h.r, h.y + Math.sin(a) * h.r); }
+      if (!h.hit && !s.victory && s.mode === 'play') {
+        const d = Math.hypot(p.x - h.x, p.y - h.y);
+        if (Math.abs(d - h.r) < 12 + p.r) { h.hit = true; hurt(s, h.dmg, { type: 'heatDome' }); }
+      }
+    }
+  }
+
   function updateEnemies(s, dt) {
     const p = s.p, near = s.near;
     const playing = s.mode === 'play' && !s.victory;
@@ -896,9 +1050,10 @@
         case 'drift': { const w = Math.sin(s.t * 1.7 + e.ph) * 0.9; vx = (dx - dy * w) * sp; vy = (dy + dx * w) * sp; break; }
         case 'charge': {
           st.ph = st.ph || 'go'; st.t = (st.t || 0) - dt;
-          if (st.ph === 'go') { vx = dx * sp; vy = dy * sp; if (dist < 230 && st.t <= 0) { st.ph = 'aim'; st.t = 0.55; } }
-          else if (st.ph === 'aim') { st.ax = dx; st.ay = dy; if (st.t <= 0) { st.ph = 'dash'; st.t = 0.6; } }
-          else if (st.ph === 'dash') { vx = st.ax * 300 * slow; vy = st.ay * 300 * slow; if (st.t <= 0) { st.ph = 'rest'; st.t = 0.7; } }
+          const roll = e.def.roll;
+          if (st.ph === 'go') { vx = dx * sp; vy = dy * sp; if (dist < (roll ? 280 : 230) && st.t <= 0) { st.ph = 'aim'; st.t = roll ? 0.65 : 0.55; } }
+          else if (st.ph === 'aim') { if (st.t > 0.2) { st.ax = dx; st.ay = dy; } if (st.t <= 0) { st.ph = 'dash'; st.t = roll ? 0.9 : 0.6; } }
+          else if (st.ph === 'dash') { const ds = roll ? 320 : 300; vx = st.ax * ds * slow; vy = st.ay * ds * slow; if (st.t <= 0) { st.ph = 'rest'; st.t = 0.7; } }
           else { vx = dx * sp * 0.3; vy = dy * sp * 0.3; if (st.t <= 0) { st.ph = 'go'; st.t = 1.2; } }
           break;
         }
@@ -915,6 +1070,8 @@
         case 'dozer': bossDozer(s, e, dt, dx, dy); vx = st.vx; vy = st.vy; break;
         case 'octo': bossOcto(s, e, dt, dx, dy); vx = st.vx; vy = st.vy; break;
         case 'tanker': bossTanker(s, e, dt, dx, dy, dist); vx = st.vx; vy = st.vy; break;
+        case 'algae': bossAlgae(s, e, dt, dx, dy); vx = st.vx; vy = st.vy; break;
+        case 'heat': bossHeat(s, e, dt, dx, dy, dist); vx = st.vx; vy = st.vy; break;
       }
       if (!playing && !s.victory) { vx *= 0.2; vy *= 0.2; }
       if (Math.abs(vx) > 2) e.face = vx > 0 ? 1 : -1;
@@ -963,6 +1120,30 @@
           p.slowT = Math.max(p.slowT, 0.25);
           p.hp -= 4 * dt;
           if (p.hp <= 0) { p.hp = 1; p.inv = 0; hurt(s, 1, { type: 'tanker' }); }
+        }
+      } else if (z.k === 'ink') {
+        z.life -= dt;
+        if (z.life <= 0) { z.dead = true; continue; }
+        z.tt -= dt;
+        const doHit = z.tt <= 0;
+        if (doHit) z.tt = z.tick;
+        s.grid.query(z.x, z.y, z.r + 48, s.near);
+        for (const e of s.near) {
+          if (e.dead) continue;
+          const d2 = U.d2(e.x, e.y, z.x, z.y);
+          if (d2 > (z.r + e.r) * (z.r + e.r)) continue;
+          e.slowT = 0.3; e.slowF = Math.max(e.slowF, z.slow);
+          if (z.pull && !e.boss) { e.x += (z.x - e.x) * Math.min(1, dt * 1.6); e.y += (z.y - e.y) * Math.min(1, dt * 1.6); }
+          if (doHit) hitEnemy(s, e, z.dmg, 0, 0, z.src);
+        }
+      } else if (z.k === 'algae') {
+        z.life -= dt;
+        if (z.life <= 0) { z.dead = true; continue; }
+        polluteAt(s, z.x + U.rnd(s.r, -z.r, z.r) * 0.7, z.y + U.rnd(s.r, -z.r, z.r) * 0.7);
+        if (U.d2(p.x, p.y, z.x, z.y) < z.r * z.r && s.mode === 'play' && !s.victory) {
+          p.slowT = Math.max(p.slowT, 0.25);
+          p.hp -= 5 * dt;
+          if (p.hp <= 0) { p.hp = 1; p.inv = 0; hurt(s, 1, { type: 'algaeKing' }); }
         }
       } else if (z.k === 'mud') {
         z.life -= dt;
@@ -1022,12 +1203,13 @@
       if (m.tiles[i] === TL.MUD && m.grow[i] > 0 && s.t >= m.grow[i]) { setTile(s, i, TL.MARSH); s.carbon += 2; n++; }
     }
     if (n) s.fx.push({ k: 'bloom', n });
+    if (!s.victory) s.greenMax = Math.max(s.greenMax, m.clean / m.land);
   }
 
   function updateStorm(s, dt) {
     const w = s.storm;
     if (!w) return;
-    if (s.t > w.end) { s.storm = null; s.fx.push({ k: 'stormEnd' }); return; }
+    if (s.t > w.end) { s.storm = null; s.stormSurvived++; s.fx.push({ k: 'stormEnd' }); return; }
     w.ang += dt * 0.2;
     const k = Math.min(1, (s.t - w.t0) / 2, (w.end - s.t) / 2);
     w.wx = Math.cos(w.ang) * 75 * k; w.wy = Math.sin(w.ang) * 75 * k;
@@ -1052,8 +1234,17 @@
     if (s.mode !== 'play') return;
     s.t += dt;
     const ev = s.stage.events;
-    while (s.evIdx < ev.length && s.t >= ev[s.evIdx].t) fireEvent(s, ev[s.evIdx++]);
-    if (s.boss && !s.boss.dead && !s.enraged && s.t > s.stage.bossAt + 90) { s.enraged = true; s.boss.spd *= 1.4; s.boss.dmg *= 1.3; s.fx.push({ k: 'alert', id: 'rage' }); }
+    while (s.evIdx < ev.length && s.t >= ev[s.evIdx].t) { const e0 = ev[s.evIdx++]; if (e0.k !== 'boss' || !s.endless) fireEvent(s, e0); }
+    if (s.endless) {
+      if (!s.boss && s.t >= s.nextBossAt) { fireEvent(s, { k: 'boss' }); s.nextBossAt = Infinity; }
+      if (s.t > 300 && s.t >= s.evNext) {
+        s.evNext = s.t + 50;
+        const pool = ev.filter(x => x.k !== 'boss');
+        const e0 = pool[s.evIdx2++ % pool.length];
+        fireEvent(s, Object.assign({}, e0, { n: e0.n ? Math.round(e0.n * (1 + (s.t - 300) / 400)) : e0.n }));
+      }
+    }
+    if (s.boss && !s.boss.dead && !s.enraged && s.t > s.bossT0 + 90) { s.enraged = true; s.boss.spd *= 1.4; s.boss.dmg *= 1.3; s.fx.push({ k: 'alert', id: 'rage' }); }
     spawnTick(s, dt);
     updatePlayer(s, dt, s.victory ? null : inp);
     updateFollowers(s);
@@ -1065,13 +1256,14 @@
     updateNovas(s, dt);
     updateEnemies(s, dt);
     updateZones(s, dt);
+    updateHeatRings(s, dt);
     updateGems(s, dt);
     updateItems(s, dt);
     updateTiles(s, dt);
     updateStorm(s, dt);
     if (s.victory) updateVictory(s, dt);
     compact(s.enemies); compact(s.shots); compact(s.eshots); compact(s.mines); compact(s.novas);
-    compact(s.zones); compact(s.gems); compact(s.items);
+    compact(s.zones); compact(s.gems); compact(s.items); compact(s.hrings);
     if (s.boss && s.boss.dead) s.boss = null;
     if (s.pendingLv > 0 && s.mode === 'play' && !s.victory) {
       s.mode = 'levelup';
@@ -1101,6 +1293,11 @@
     for (const sh of s.eshots) {
       const dx = p.x - sh.x, dy = p.y - sh.y, d = Math.hypot(dx, dy) + 1;
       if (d < 90) { ax += dx / d * 2; ay += dy / d * 2; }
+    }
+    for (const z of s.zones) {
+      if (z.k !== 'algae') continue;
+      const dx = p.x - z.x, dy = p.y - z.y, d = Math.hypot(dx, dy) + 1;
+      if (d < z.r + 30) { ax += dx / d * 3; ay += dy / d * 3; threat += 3; }
     }
     if (s.boss && s.boss.st.ph === 'aim') {
       const e = s.boss, ux = e.st.ax, uy = e.st.ay;
@@ -1162,19 +1359,21 @@
   function results(s) {
     const win = s.mode === 'won';
     const restored = s.map.clean / s.map.land;
-    const pearls = Math.round((s.kills * 0.03 + s.carbon * 0.012 + s.t * 0.12 + (win ? 60 : 0) + s.bonusPearls) * (1 + 0.5 * (s.stage.id - 1)) * (1 + 0.1 * (s.meta.greed || 0)));
+    const pearls = Math.round((s.kills * 0.03 + s.carbon * 0.012 + s.t * 0.12 + (win ? 60 : 0) + s.bossKills * 60 + s.bonusPearls)
+      * (1 + 0.5 * (s.stage.id - 1)) * (1 + D.STARS.pearls * (s.star - 1)) * (1 + 0.1 * (s.meta.greed || 0)));
     let mvp = null, mv = 0;
     for (const k in s.stats) if (D.WEAPONS[k] && s.stats[k] > mv) { mv = s.stats[k]; mvp = k; }
     return {
       win, stage: s.stage.id, char: s.ch.id, time: win ? s.endT : s.t, level: s.p.level, kills: s.kills,
       carbon: Math.round(s.carbon), restored, pearls, killedBy: s.killedBy, mvp,
       build: s.weapons.map(w => ({ id: w.id, lv: w.lv, evo: w.evo })), passives: Object.assign({}, s.passives),
-      seen: Object.keys(s.seen),
+      seen: Object.keys(s.seen), star: s.star, endless: s.endless, bossKills: s.bossKills, evoCount: s.evoCount,
+      stormSurvived: s.stormSurvived, greenMax: s.greenMax,
     };
   }
 
   GS.sim = {
     WW, WH, newRun, step, choose, reroll, closeChest, bot, botChoose, results, tileAt, xpFor, wstat, rollChoices,
-    restoreAt, spawnEnemy, hitEnemy, densAt,
+    restoreAt, spawnEnemy, hitEnemy, densAt, densFor,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

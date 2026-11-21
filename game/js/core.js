@@ -2,7 +2,7 @@
 (function (root) {
   'use strict';
   const GS = root.GS = root.GS || {};
-  GS.VERSION = '0.3.0';
+  GS.VERSION = '0.4.0';
 
   function rng(seed) {
     let a = seed >>> 0;

@@ -8,7 +8,7 @@
   const cam = { x: 0, y: 0, shake: 0, sx: 0, sy: 0, punch: 0, flash: 0, flashCol: '255,255,255', red: 0 };
   const opt = { lite: false, reduced: false, dmg: true, shake: true };
   const parts = [], texts = [], rings = [], sweeps = [], bolts = [];
-  let vignette = null, cloud = null;
+  let cloud = null;
   const pool = [];
   let joy = null;
 
@@ -19,24 +19,54 @@
   }
   function resize() {
     W = Math.max(1, root.innerWidth); H = Math.max(1, root.innerHeight);
-    dpr = Math.min(root.devicePixelRatio || 1, opt.lite ? 1 : 2);
+    const maxPx = opt.lite ? 0.9e6 : 2.6e6;
+    dpr = Math.max(0.5, Math.min(root.devicePixelRatio || 1, opt.lite ? 1 : 2, Math.sqrt(maxPx / (W * H))));
     cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
     zoom = U.clamp(Math.sqrt(W * H / C.VIEW_AREA), 0.55, 2.6);
     K = zoom * dpr;
     const bs = Math.max(1, Math.round(K * 2) / 2);
     if (bs !== BS) { BS = bs; A.bakeAll(BS); }
-    vignette = makeVignette();
+    vignette = null; redEdge = null; beams = null;
   }
   function view() { return { hw: W / 2 / zoom, hh: H / 2 / zoom }; }
   function setOpt(o) { Object.assign(opt, o); }
 
-  function makeVignette() {
-    const c = document.createElement('canvas'); c.width = cv.width; c.height = cv.height;
+  let vignette = null, vigLv = -1, redEdge = null, beams = null;
+  function makeVignette(dusk) {
+    const w = Math.ceil(cv.width / 2), h = Math.ceil(cv.height / 2);
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
     const g = c.getContext('2d');
-    const r = Math.hypot(c.width, c.height) / 2;
-    const gr = g.createRadialGradient(c.width / 2, c.height / 2, r * 0.45, c.width / 2, c.height / 2, r);
-    gr.addColorStop(0, 'rgba(8,16,28,0)'); gr.addColorStop(1, 'rgba(8,16,28,0.55)');
-    g.fillStyle = gr; g.fillRect(0, 0, c.width, c.height);
+    if (dusk > 0) {
+      g.fillStyle = `rgba(255,${Math.round(150 - dusk * 70)},${Math.round(70 + dusk * 30)},${(0.13 * dusk).toFixed(3)})`;
+      g.fillRect(0, 0, w, h);
+      if (dusk > 0.6) { g.fillStyle = `rgba(60,20,70,${((dusk - 0.6) * 0.25).toFixed(3)})`; g.fillRect(0, 0, w, h); }
+    }
+    const r = Math.hypot(w, h) / 2;
+    const gr = g.createRadialGradient(w / 2, h / 2, r * 0.45, w / 2, h / 2, r);
+    gr.addColorStop(0, 'rgba(8,16,28,0)'); gr.addColorStop(1, `rgba(${dusk > 0 ? '40,14,30' : '8,16,28'},0.55)`);
+    g.fillStyle = gr; g.fillRect(0, 0, w, h);
+    return c;
+  }
+  function makeRedEdge() {
+    const w = Math.ceil(cv.width / 2), h = Math.ceil(cv.height / 2);
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const g = c.getContext('2d'), r = Math.hypot(w, h) / 2;
+    const gr = g.createRadialGradient(w / 2, h / 2, r * 0.5, w / 2, h / 2, r);
+    gr.addColorStop(0, 'rgba(255,0,40,0)'); gr.addColorStop(1, 'rgba(255,20,50,0.55)');
+    g.fillStyle = gr; g.fillRect(0, 0, w, h);
+    return c;
+  }
+  function makeBeams() {
+    const w = Math.ceil(cv.width / 2), h = Math.ceil(cv.height / 2);
+    const c = document.createElement('canvas'); c.width = w * 2; c.height = h;
+    const g = c.getContext('2d');
+    for (let k = 0; k < 10; k++) {
+      const x = (k / 10 + 0.03) * w * 2;
+      const gr = g.createLinearGradient(x, 0, x + w * 0.12, h);
+      gr.addColorStop(0, 'rgba(160,230,255,0.10)'); gr.addColorStop(1, 'rgba(160,230,255,0)');
+      g.fillStyle = gr;
+      g.beginPath(); g.moveTo(x, 0); g.lineTo(x + w * 0.06, 0); g.lineTo(x + w * 0.2, h); g.lineTo(x + w * 0.1, h); g.fill();
+    }
     return c;
   }
   function makeCloud() {
@@ -78,7 +108,13 @@
 
   // ── 이펙트 만들기 ───────────────────────────────────────
   function cap() { return opt.lite ? 260 : 750; }
-  function part(p) { if (parts.length < cap()) parts.push(p); }
+  function part(p) {
+    if (parts.length >= cap()) return;
+    if (p.k === 'cube' || p.k === 'drop') { p.cT = A.shade(p.c, 1.12); p.cF = A.shade(p.c, 0.78); }
+    else if (p.k === 'spark') p.g = A.glow(p.c);
+    else if (p.k === 'smoke') p.c = p.c + '1)';
+    parts.push(p);
+  }
   function cubes(x, y, cols, n, spd, up) {
     if (opt.lite) n = Math.ceil(n / 2);
     for (let i = 0; i < n; i++) {
@@ -148,47 +184,119 @@
       case 'magnet': ring(p.x, p.y, 220, 'rgba(120,200,255,', 0.6, 5); break;
       case 'boss': shake(16); flash('40,0,0', 0.35); break;
       case 'bosskill':
+        if (e.endless) { cubes(e.x, e.y, ['#ffffff', '#ffd23f', '#7dff9a'], 40, 220, 260); ring(e.x, e.y, 360, 'rgba(120,255,200,', 0.8, 8); flash('255,255,255', 0.5); shake(14); break; }
         cubes(e.x, e.y, ['#f2b632', '#2b2b2b', '#ffffff', '#ff9a3c'], 70, 260, 320);
         for (let i = 0; i < 4; i++) ring(e.x, e.y, 120 + i * 120, 'rgba(120,255,200,', 0.6 + i * 0.25, 8);
         flash('255,255,255', 0.9); shake(24);
         break;
       case 'dead': cubes(p.x, p.y, ['#a2a86c', '#ead9a6', '#ffffff'], 24, 140, 200); flash('255,40,60', 0.5); shake(14); break;
+      case 'boing': ring(e.x, e.y, 20, 'rgba(255,240,160,', 0.25, 3); sparks(e.x, e.y, 'rgba(255,230,140,1)', 2, 50, 0.3); break;
+      case 'pop': ring(e.x, e.y, 26, 'rgba(170,230,255,', 0.3, 3); cubes(e.x, e.y, ['#bfe8ff', '#ffffff'], 4, 60, 70); break;
+      case 'ink': cubes(e.x, e.y, ['#2a2236', '#4a3a5a'], 3, 40, 60); break;
+      case 'bloomBoss': cubes(e.x, e.y, ['#4a9238', '#a8e070', '#2f6b2a'], 14, 140, 160); ring(e.x, e.y, 90, 'rgba(120,220,90,', 0.5, 6); shake(6); break;
+      case 'heatPulse': flash('255,150,60', 0.18); shake(5); break;
     }
   }
 
-  // ── 땅 ─────────────────────────────────────────────────
+  // ── 땅 (바다 무늬 + 물길 + 조각 캐시) ─────────────────────────
+  const CH = 8, chunks = new Map(), seaPat = [];
+  let chMap = null, chKey = '', frameNo = 0;
+  function resetChunks() { chunks.clear(); seaPat.length = 0; }
+  function seaPattern(fr) {
+    if (seaPat[fr] !== undefined) return seaPat[fr];
+    const S = A.TILES.S, n = 4;
+    const c = document.createElement('canvas'); c.width = c.height = S * n;
+    const g = c.getContext('2d'); g.imageSmoothingEnabled = false;
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+      const vi = (U.hash2(x, y, 5) * 6) | 0;
+      g.drawImage(A.tile(TL.SEA, vi, (fr + vi) % 3), x * S, y * S, S, S);
+    }
+    let pat = null;
+    try { pat = ctx.createPattern(c, 'repeat'); pat.setTransform(new DOMMatrix([T / S, 0, 0, T / S, 0, 0])); } catch (e) { pat = null; }
+    seaPat[fr] = pat;
+    return pat;
+  }
+  function renderChunk(m, cx, cy, e) {
+    const S = A.TILES.S, k = S / T, pad = Math.ceil(8 * k), th = A.TILES.th;
+    if (!e.c) { e.c = document.createElement('canvas'); e.c.width = CH * S; e.c.height = CH * S + pad * 2; }
+    const g = e.c.getContext('2d');
+    g.imageSmoothingEnabled = false;
+    g.clearRect(0, 0, e.c.width, e.c.height);
+    for (let ty = cy * CH; ty < cy * CH + CH && ty < MH; ty++) {
+      for (let tx = cx * CH; tx < cx * CH + CH && tx < MW; tx++) {
+        const t = m.tiles[ty * MW + tx];
+        if (t === TL.SEA || t === TL.CREEK || t === TL.POOL) continue;
+        const h = TH[t], vi = (U.hash2(tx, ty, 9) * 6) | 0;
+        const X = (tx - cx * CH) * S, Y = (ty - cy * CH) * S - h * k + pad;
+        g.drawImage(A.tile(t, vi, 0), X, Y, S + 0.5, S + 0.5);
+        const hb = TH[ty + 1 < MH ? m.tiles[(ty + 1) * MW + tx] : TL.SEA];
+        if (hb < h) { g.fillStyle = th.front[t] || '#3a3a3a'; g.fillRect(X, (ty + 1 - cy * CH) * S - h * k + pad, S + 0.5, (h - hb) * k); }
+      }
+    }
+    e.pad = pad; e.k = k;
+  }
   function drawGround(s) {
     const m = s.map, th = A.TILES.th;
+    const key = A.TILES.theme + '@' + A.TILES.bs;
+    if (chMap !== m || chKey !== key) { resetChunks(); chMap = m; chKey = key; }
+    frameNo++;
     const hw = W / 2 / zoom, hh = H / 2 / zoom;
     const x0 = Math.floor((cam.x - hw) / T) - 1, x1 = Math.floor((cam.x + hw) / T) + 1;
     const y0 = Math.floor((cam.y - hh) / T) - 1, y1 = Math.floor((cam.y + hh) / T) + 2;
-    const fr = Math.floor(time * 2.2);
+    const fr = Math.floor(time * 2.2) % 3;
     worldT();
-    const tAt = (x, y) => (x < 0 || y < 0 || x >= MW || y >= MH) ? TL.SEA : m.tiles[y * MW + x];
-    for (let ty = y0; ty <= y1; ty++) {
-      for (let tx = x0; tx <= x1; tx++) {
-        const inside = tx >= 0 && ty >= 0 && tx < MW && ty < MH;
-        const i = ty * MW + tx;
-        const t = inside ? m.tiles[i] : TL.SEA;
-        const h = TH[t];
-        const vi = (U.hash2(tx, ty, 9) * 6) | 0;
-        const anim = t === TL.SEA || t === TL.CREEK || t === TL.POOL;
-        const img = A.tile(t, vi, anim ? (fr + vi) % 3 : 0);
-        const age = inside ? s.t - m.changed[i] : 9;
-        const X = tx * T, Y = ty * T - h;
+    // 1) 바다
+    const pat = seaPattern(fr);
+    ctx.fillStyle = pat || th.sea;
+    ctx.fillRect(x0 * T, y0 * T, (x1 - x0 + 1) * T, (y1 - y0 + 1) * T);
+    // 2) 움직이는 물길
+    const ys = Math.max(0, y0), ye = Math.min(MH - 1, y1), xs = Math.max(0, x0), xe = Math.min(MW - 1, x1);
+    for (let ty = ys; ty <= ye; ty++) {
+      for (let tx = xs; tx <= xe; tx++) {
+        const t = m.tiles[ty * MW + tx];
+        if (t !== TL.CREEK && t !== TL.POOL) continue;
+        const h = TH[t], vi = (U.hash2(tx, ty, 9) * 6) | 0;
+        ctx.drawImage(A.tile(t, vi, (fr + vi) % 3), tx * T, ty * T - h, T + 0.6, T + 0.6);
+        const hb = TH[ty + 1 < MH ? m.tiles[(ty + 1) * MW + tx] : TL.SEA];
+        if (hb < h) { ctx.fillStyle = th.front[t] || '#2a3a3a'; ctx.fillRect(tx * T, (ty + 1) * T - h, T + 0.6, h - hb); }
+      }
+    }
+    // 3) 땅 조각 (바뀐 조각은 한 장면에 3개까지만 다시 그려요)
+    let budget = 3;
+    const cx0 = Math.max(0, Math.floor(xs / CH)), cx1 = Math.min(m.cw - 1, Math.floor(xe / CH));
+    const cy0 = Math.max(0, Math.floor(ys / CH)), cy1 = Math.min(Math.ceil(MH / CH) - 1, Math.floor(ye / CH));
+    for (let cy = cy0; cy <= cy1; cy++) {
+      for (let cx = cx0; cx <= cx1; cx++) {
+        const ci = cy * m.cw + cx;
+        let e = chunks.get(ci);
+        if (!e) { e = { c: null, used: 0 }; chunks.set(ci, e); }
+        if (!e.c || (m.dirtyCh[ci] && budget > 0)) { renderChunk(m, cx, cy, e); m.dirtyCh[ci] = 0; budget--; }
+        e.used = frameNo;
+        ctx.drawImage(e.c, cx * CH * T, cy * CH * T - e.pad / e.k, CH * T, e.c.height / e.k);
+      }
+    }
+    if (chunks.size > 44) {
+      const arr = [...chunks.entries()].sort((a, b) => a[1].used - b[1].used);
+      for (let i = 0; i < arr.length - 36; i++) chunks.delete(arr[i][0]);
+    }
+    // 4) 되살아나는 칸 반짝임 + 물가 거품
+    for (let ty = ys; ty <= ye; ty++) {
+      for (let tx = xs; tx <= xe; tx++) {
+        const i = ty * MW + tx, t = m.tiles[i];
+        const age = s.t - m.changed[i];
         if (age >= 0 && age < 0.55) {
-          const q = age / 0.55, sc = 1 + 0.32 * Math.sin(q * Math.PI) * (1 - q * 0.5);
-          const lift = Math.sin(q * Math.PI) * 5;
-          ctx.drawImage(img, X + T / 2 - T * sc / 2, Y - lift + T / 2 - T * sc / 2, T * sc, T * sc);
-          ctx.fillStyle = `rgba(200,255,230,${(1 - q) * 0.55})`;
+          const h = TH[t], vi = (U.hash2(tx, ty, 9) * 6) | 0;
+          const q = age / 0.55, sc = 1 + 0.32 * Math.sin(q * Math.PI) * (1 - q * 0.5), lift = Math.sin(q * Math.PI) * 5;
+          const X = tx * T, Y = ty * T - h;
+          ctx.drawImage(A.tile(t, vi, 0), X + T / 2 - T * sc / 2, Y - lift + T / 2 - T * sc / 2, T * sc, T * sc);
+          ctx.fillStyle = `rgba(200,255,230,${((1 - q) * 0.55).toFixed(2)})`;
           ctx.fillRect(X, Y - lift, T, T);
-        } else ctx.drawImage(img, X, Y, T + 0.6, T + 0.6);
-        const tb = tAt(tx, ty + 1), hb = TH[tb];
-        if (hb < h) { ctx.fillStyle = th.front[t] || '#3a3a3a'; ctx.fillRect(X, (ty + 1) * T - h, T + 0.6, h - hb); }
-        if (t === TL.SEA && inside && m.shore[i]) {
+        }
+        if (t === TL.SEA && m.shore[i]) {
           const a = 0.28 + 0.22 * Math.sin(time * 2.4 + tx * 0.7 + ty * 0.5);
-          ctx.fillStyle = `rgba(235,250,255,${a})`;
-          const w = 3 + Math.sin(time * 2.4 + tx) * 1.5;
+          ctx.fillStyle = `rgba(235,250,255,${a.toFixed(2)})`;
+          const w = 3 + Math.sin(time * 2.4 + tx) * 1.5, X = tx * T, Y = ty * T + 7;
+          const tAt = (x, y) => (x < 0 || y < 0 || x >= MW || y >= MH) ? TL.SEA : m.tiles[y * MW + x];
           if (tAt(tx, ty - 1) !== TL.SEA) ctx.fillRect(X, Y, T, w);
           if (tAt(tx, ty + 1) !== TL.SEA) ctx.fillRect(X, Y + T - w, T, w);
           if (tAt(tx - 1, ty) !== TL.SEA) ctx.fillRect(X, Y, w, T);
@@ -218,6 +326,19 @@
         ctx.beginPath(); ctx.ellipse(z.x, z.y, z.r, z.r * 0.8, 0, 0, TAU); ctx.fill();
         ctx.fillStyle = `rgba(110,80,160,${a * 0.5})`;
         ctx.beginPath(); ctx.ellipse(z.x - z.r * 0.3, z.y - z.r * 0.2, z.r * 0.35, z.r * 0.15, 0.3, 0, TAU); ctx.fill();
+      } else if (z.k === 'ink') {
+        const a = Math.min(1, z.life / 0.6, (z.max - z.life) / 0.25 + 0.2);
+        ctx.fillStyle = `rgba(36,28,52,${(0.55 * a).toFixed(3)})`;
+        ctx.beginPath(); ctx.ellipse(z.x, z.y, z.r, z.r * 0.82, 0, 0, TAU); ctx.fill();
+        ctx.strokeStyle = `rgba(120,90,160,${(0.6 * a).toFixed(3)})`; ctx.lineWidth = 2;
+        const sp = z.pull ? time * 4 : time * 1.2;
+        for (let k = 0; k < 3; k++) { ctx.beginPath(); ctx.ellipse(z.x, z.y, z.r * (0.35 + k * 0.22), z.r * (0.28 + k * 0.18), 0, sp + k * 2, sp + k * 2 + 2.2); ctx.stroke(); }
+      } else if (z.k === 'algae') {
+        const a = Math.min(1, z.life / 1.5) * 0.8;
+        ctx.fillStyle = `rgba(70,140,50,${a.toFixed(3)})`;
+        ctx.beginPath(); ctx.ellipse(z.x, z.y, z.r, z.r * 0.8, 0, 0, TAU); ctx.fill();
+        ctx.fillStyle = `rgba(190,240,120,${(a * 0.6).toFixed(3)})`;
+        for (let k = 0; k < 4; k++) { const bx = z.x + Math.cos(k * 1.7 + time) * z.r * 0.5, by = z.y + Math.sin(k * 2.3) * z.r * 0.35; ctx.beginPath(); ctx.arc(bx, by, 2.5 + Math.sin(time * 4 + k) * 1, 0, TAU); ctx.fill(); }
       } else if (z.k === 'mud') {
         ctx.fillStyle = `rgba(110,80,50,${Math.min(1, z.life) * 0.55})`;
         ctx.beginPath(); ctx.ellipse(z.x, z.y, z.r, z.r * 0.75, 0, 0, TAU); ctx.fill();
@@ -245,6 +366,14 @@
         ctx.beginPath(); ctx.moveTo(x, -w * 0.3); ctx.lineTo(x + 22, 0); ctx.lineTo(x, w * 0.3); ctx.lineTo(x + 8, 0); ctx.closePath(); ctx.fill();
       }
       worldT();
+    }
+    // 열 고리 (바다 열돔)
+    for (const h of s.hrings) {
+      const a = 1 - h.r / h.max;
+      ctx.lineWidth = 12; ctx.strokeStyle = `rgba(255,120,40,${(0.45 * a + 0.1).toFixed(3)})`;
+      ctx.beginPath(); ctx.ellipse(h.x, h.y, h.r, h.r * 0.85, 0, 0, TAU); ctx.stroke();
+      ctx.lineWidth = 3; ctx.strokeStyle = `rgba(255,230,140,${(0.9 * a + 0.1).toFixed(3)})`;
+      ctx.beginPath(); ctx.ellipse(h.x, h.y, h.r, h.r * 0.85, 0, 0, TAU); ctx.stroke();
     }
     // 갯지렁이 함정
     for (const mi of s.mines) {
@@ -365,7 +494,8 @@
     const model = d.model;
     const meta = A.MODELS[model];
     let f = 0;
-    if (model === 'micro') f = e.v; else if (meta && meta.frames > 1) f = Math.floor(time * 4 + e.id) % meta.frames;
+    if (model === 'micro') f = e.v;
+    else if (meta && meta.frames > 1) f = Math.floor(time * (d.roll ? (e.st.ph === 'dash' ? 24 : 10) : d.spin ? 6 : 4) + e.id) % meta.frames;
     const sp = A.spr(model, f);
     const sc = e.r / d.r;
     let z = FLOAT[model] ? 4 + Math.sin(time * 3 + e.ph) * 2.5 : Math.abs(Math.sin(time * 7 + e.ph)) * (e.boss ? 0 : 1.6);
@@ -379,15 +509,12 @@
     worldT();
     if (e.elite) drawGlow('rgba(255,70,70,0.75)', e.x, e.y - e.r * 0.6, e.r * 2.1, 0.55 + 0.25 * Math.sin(time * 6));
     if (e.boss) drawGlow('rgba(255,60,40,0.6)', e.x, e.y - e.r * 0.5, e.r * 2.4, 0.5);
+    if (d.spin) rot = Math.sin(time * 3 + e.ph) * 0.25;
+    if (e.boss && d.model === 'heatDome') { worldT(); drawGlow('rgba(255,150,40,0.7)', e.x, e.y - e.r, e.r * 3, 0.5 + 0.2 * Math.sin(time * 5)); }
     const facing = model === 'bottle' || model === 'dozer' || model === 'tanker';
     const fl = e.flash > 0, fo = { sx: sxx * sc, sy: sy * sc, flash: fl && !e.boss, flip: facing ? e.face < 0 : false, rot, alpha: model === 'bag' ? 0.93 : null };
     drawSpr(sp, x, e.y, z, fo);
     if (fl && e.boss) { fo.flash = true; fo.alpha = 0.45; drawSpr(sp, x, e.y, z, fo); }
-    if (e.slowT > 0 && e.slowF > 0.2 && !opt.lite) {
-      worldT();
-      ctx.strokeStyle = 'rgba(110,230,150,0.7)'; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.ellipse(e.x, e.y + 1, e.r * 0.9, e.r * 0.35, 0, 0, TAU); ctx.stroke();
-    }
     if (e.elite) {
       worldT();
       const w = e.r * 2, q = Math.max(0, e.hp / e.maxHp);
@@ -430,8 +557,24 @@
       ctx.beginPath(); ctx.moveTo(sh.x - ux * len, sh.y - uy * len); ctx.lineTo(sh.x, sh.y); ctx.stroke();
     }
     ctx.globalCompositeOperation = 'source-over';
+    for (const sh of s.shots) {
+      if (sh.k === 'ball') {
+        drawSpr(A.spr('ball', 0), sh.x, sh.y, 8 + Math.abs(Math.sin(sh.spin * 0.45)) * 12, { rot: sh.spin, sx: sh.r / 8, sy: sh.r / 8 });
+      } else if (sh.k === 'bubble') {
+        worldT();
+        const r = sh.r * (1 + Math.sin(time * 9 + sh.x) * 0.08);
+        ctx.fillStyle = 'rgba(150,220,255,0.28)'; ctx.strokeStyle = 'rgba(220,245,255,0.9)'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(sh.x, sh.y - 10, r, 0, TAU); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fillRect(sh.x - r * 0.45, sh.y - 10 - r * 0.5, 2.2, 2.2);
+      }
+    }
+    worldT();
     for (const b of s.eshots) {
-      if (b.k === 'net') {
+      if (b.k === 'spore') {
+        drawGlow('rgba(140,230,90,0.8)', b.x, b.y - 6, b.r * 2, 0.6);
+        ctx.fillStyle = '#4a9238'; ctx.beginPath(); ctx.arc(b.x, b.y - 6, b.r, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#c8f08a'; ctx.beginPath(); ctx.arc(b.x - 2, b.y - 8, b.r * 0.35, 0, TAU); ctx.fill();
+      } else if (b.k === 'net') {
         ctx.save(); ctx.translate(b.x, b.y - 6); ctx.rotate(time * 6);
         ctx.strokeStyle = '#5fb07f'; ctx.lineWidth = 1.6;
         for (let k = -1; k <= 1; k++) { ctx.beginPath(); ctx.moveTo(-b.r, k * 5); ctx.lineTo(b.r, k * 5); ctx.moveTo(k * 5, -b.r); ctx.lineTo(k * 5, b.r); ctx.stroke(); }
@@ -463,40 +606,60 @@
     }
   }
 
+  const sparkBuf = [];
   function drawParts(dt) {
     worldT();
-    for (let i = parts.length - 1; i >= 0; i--) {
+    sparkBuf.length = 0;
+    let w = 0;
+    for (let i = 0; i < parts.length; i++) {
       const p = parts[i];
       p.t += dt;
-      if (p.t >= p.life) { parts.splice(i, 1); continue; }
+      if (p.t >= p.life) continue;
+      parts[w++] = p;
       p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
       const q = p.t / p.life;
       if (p.k === 'cube' || p.k === 'drop') {
         p.vz -= 520 * dt;
         if (p.z < 0) { p.z = 0; p.vz *= -0.35; p.vx *= 0.6; p.vy *= 0.6; }
-        const s = p.s * (q > 0.7 ? (1 - q) / 0.3 : 1);
-        ctx.fillStyle = A.shade(p.c, 0.78); ctx.fillRect(p.x - s / 2, p.y - p.z - s * 0.2, s, s * 0.75);
-        ctx.fillStyle = A.shade(p.c, 1.12); ctx.fillRect(p.x - s / 2, p.y - p.z - s * 0.7, s, s * 0.5);
+        const sz = p.s * (q > 0.7 ? (1 - q) / 0.3 : 1);
+        ctx.fillStyle = p.cF; ctx.fillRect(p.x - sz / 2, p.y - p.z - sz * 0.2, sz, sz * 0.75);
+        ctx.fillStyle = p.cT; ctx.fillRect(p.x - sz / 2, p.y - p.z - sz * 0.7, sz, sz * 0.5);
       } else if (p.k === 'spark') {
         p.vz -= 60 * dt;
-        ctx.globalCompositeOperation = 'lighter';
-        drawGlow(p.c.replace(/1\)$/, (1 - q) + ')'), p.x, p.y - p.z, p.s * (1 - q * 0.5));
-        ctx.globalCompositeOperation = 'source-over';
+        sparkBuf.push(p);
       } else if (p.k === 'smoke') {
         const r = p.s * (1 + q * 1.6);
-        ctx.fillStyle = p.c + (0.5 * (1 - q)) + ')';
+        ctx.globalAlpha = 0.5 * (1 - q);
+        ctx.fillStyle = p.c;
         ctx.beginPath(); ctx.arc(p.x, p.y - p.z, r, 0, TAU); ctx.fill();
+        ctx.globalAlpha = 1;
       } else if (p.k === 'leaf') {
         ctx.fillStyle = p.c; ctx.globalAlpha = 1 - q;
         ctx.fillRect(p.x - p.s / 2 + Math.sin(p.t * 8) * 3, p.y - p.z, p.s, p.s);
         ctx.globalAlpha = 1;
       } else if (p.k === 'bubble') {
-        ctx.strokeStyle = `rgba(200,240,255,${0.6 * (1 - q)})`; ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(200,240,255,0.6)'; ctx.globalAlpha = 1 - q; ctx.lineWidth = 1;
         ctx.beginPath(); ctx.arc(p.x + Math.sin(p.t * 3) * 3, p.y - p.z, p.s, 0, TAU); ctx.stroke();
+        ctx.globalAlpha = 1;
       }
     }
-    for (let i = rings.length - 1; i >= 0; i--) { rings[i].t += dt; if (rings[i].t >= rings[i].life) rings.splice(i, 1); }
-    for (let i = sweeps.length - 1; i >= 0; i--) { sweeps[i].t += dt; if (sweeps[i].t >= sweeps[i].life) sweeps.splice(i, 1); }
+    parts.length = w;
+    if (sparkBuf.length) {
+      ctx.globalCompositeOperation = 'lighter';
+      for (const p of sparkBuf) {
+        const q = p.t / p.life, r = p.s * (1 - q * 0.5);
+        ctx.globalAlpha = 1 - q;
+        ctx.drawImage(p.g, p.x - r, p.y - p.z - r, r * 2, r * 2);
+      }
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    let j = 0;
+    for (let i = 0; i < rings.length; i++) { rings[i].t += dt; if (rings[i].t < rings[i].life) rings[j++] = rings[i]; }
+    rings.length = j;
+    j = 0;
+    for (let i = 0; i < sweeps.length; i++) { sweeps[i].t += dt; if (sweeps[i].t < sweeps[i].life) sweeps[j++] = sweeps[i]; }
+    sweeps.length = j;
   }
 
   function drawBolts(dt) {
@@ -518,23 +681,57 @@
     }
   }
 
+  const ATLAS = {};
+  function atlas(col) {
+    let a = ATLAS[col];
+    if (a) return a;
+    const chars = '0123456789+-', fs = 44, padX = 7;
+    const c = document.createElement('canvas'), g = c.getContext('2d');
+    const font = `${fs}px Jua, 'Black Han Sans', sans-serif`;
+    g.font = font;
+    const ws = chars.split('').map(ch => Math.ceil(g.measureText(ch).width) + padX * 2);
+    c.width = ws.reduce((x, y) => x + y, 0); c.height = fs + 18;
+    g.font = font; g.textBaseline = 'middle'; g.textAlign = 'left'; g.lineJoin = 'round';
+    g.lineWidth = 9; g.strokeStyle = 'rgba(15,20,30,0.9)'; g.fillStyle = col;
+    const map = {};
+    let x = 0;
+    chars.split('').forEach((ch, i) => { g.strokeText(ch, x + padX, c.height / 2); g.fillText(ch, x + padX, c.height / 2); map[ch] = { x, w: ws[i] }; x += ws[i]; });
+    a = ATLAS[col] = { c, map, h: c.height, fs, pad: padX };
+    return a;
+  }
+  if (root.document && document.fonts && document.fonts.ready) document.fonts.ready.then(() => { for (const k in ATLAS) delete ATLAS[k]; });
   function drawTexts(dt) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.lineJoin = 'round';
-    for (let i = texts.length - 1; i >= 0; i--) {
+    let j = 0;
+    for (let i = 0; i < texts.length; i++) {
       const t = texts[i];
       t.t += dt;
-      if (t.t >= t.life) { texts.splice(i, 1); continue; }
+      if (t.t >= t.life) continue;
+      texts[j++] = t;
       const q = t.t / t.life;
       const x = (t.x + t.vx * q) * K + ox, y = (t.y - 26 * U.outCubic(q)) * K + oy;
       const sz = t.size * K * (q < 0.15 ? 0.7 + q * 2.6 : 1.09 - q * 0.15);
-      ctx.font = `${Math.round(sz)}px Jua, 'Black Han Sans', sans-serif`;
       ctx.globalAlpha = q > 0.7 ? (1 - q) / 0.3 : 1;
-      ctx.lineWidth = Math.max(2, sz * 0.22); ctx.strokeStyle = 'rgba(15,20,30,0.85)';
-      ctx.strokeText(t.v, x, y);
-      ctx.fillStyle = t.col; ctx.fillText(t.v, x, y);
+      const str = String(t.v);
+      if (/^[0-9+-]+$/.test(str)) {
+        const a = atlas(t.col), sc = sz / a.fs;
+        let w = 0;
+        for (const ch of str) w += (a.map[ch].w - a.pad * 1.6) * sc;
+        let px = x - w / 2 - a.pad * 0.8 * sc;
+        for (const ch of str) {
+          const m = a.map[ch];
+          ctx.drawImage(a.c, m.x, 0, m.w, a.h, px, y - a.h * sc / 2, m.w * sc, a.h * sc);
+          px += (m.w - a.pad * 1.6) * sc;
+        }
+      } else {
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+        ctx.font = `${Math.round(sz)}px Jua, 'Black Han Sans', sans-serif`;
+        ctx.lineWidth = Math.max(2, sz * 0.22); ctx.strokeStyle = 'rgba(15,20,30,0.85)';
+        ctx.strokeText(str, x, y);
+        ctx.fillStyle = t.col; ctx.fillText(str, x, y);
+      }
     }
+    texts.length = j;
     ctx.globalAlpha = 1;
   }
 
@@ -561,33 +758,20 @@
     const th = A.TILES.th;
     if (th && th.sky) { ctx.fillStyle = th.sky; ctx.fillRect(0, 0, cv.width, cv.height); }
     // 바닷속 빛줄기
-    if (A.TILES.theme === 'forest' && !opt.lite) {
+    if (th && th.beams && !opt.lite) {
+      if (!beams) beams = makeBeams();
+      const off = ((time * 0.012) % 1) * cv.width;
       ctx.globalCompositeOperation = 'lighter';
-      for (let k = 0; k < 5; k++) {
-        const x = ((k * 0.23 + time * 0.012) % 1.2 - 0.1) * cv.width;
-        const g = ctx.createLinearGradient(x, 0, x + cv.width * 0.12, cv.height);
-        g.addColorStop(0, 'rgba(160,230,255,0.10)'); g.addColorStop(1, 'rgba(160,230,255,0)');
-        ctx.fillStyle = g;
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x + cv.width * 0.06, 0); ctx.lineTo(x + cv.width * 0.2, cv.height); ctx.lineTo(x + cv.width * 0.1, cv.height); ctx.fill();
-      }
+      ctx.drawImage(beams, -off, 0, cv.width * 2, cv.height);
+      ctx.drawImage(beams, cv.width * 2 - off, 0, cv.width * 2, cv.height);
       ctx.globalCompositeOperation = 'source-over';
       if (Math.random() < 0.3) part({ k: 'bubble', x: cam.x + (Math.random() - 0.5) * W / zoom, y: cam.y + (Math.random() - 0.2) * H / zoom * 0.6, z: 0, vx: 0, vy: 0, vz: 25, s: 1.5 + Math.random() * 2, t: 0, life: 2.5 });
-    }
-    // 하루가 저물어요 (보스가 가까울수록 노을)
-    const q = U.clamp(s.t / (s.stage.bossAt || 270), 0, 1.2);
-    if (q > 0.35) {
-      const a = U.clamp((q - 0.35) / 0.65, 0, 1);
-      ctx.globalCompositeOperation = 'soft-light';
-      ctx.fillStyle = `rgba(255,${Math.round(150 - a * 70)},${Math.round(70 + a * 30)},${0.45 * a})`;
-      ctx.fillRect(0, 0, cv.width, cv.height);
-      ctx.globalCompositeOperation = 'source-over';
-      if (a > 0.6) { ctx.fillStyle = `rgba(60,20,70,${(a - 0.6) * 0.25})`; ctx.fillRect(0, 0, cv.width, cv.height); }
     }
     // 태풍
     if (s.storm) {
       const st = s.storm, k = U.clamp(Math.min(s.t - st.t0, st.end - s.t) / 2, 0, 1);
-      ctx.fillStyle = `rgba(14,24,44,${0.38 * k})`; ctx.fillRect(0, 0, cv.width, cv.height);
-      ctx.strokeStyle = `rgba(190,215,255,${0.35 * k})`; ctx.lineWidth = Math.max(1, dpr);
+      ctx.fillStyle = `rgba(14,24,44,${(0.38 * k).toFixed(3)})`; ctx.fillRect(0, 0, cv.width, cv.height);
+      ctx.strokeStyle = `rgba(190,215,255,${(0.35 * k).toFixed(3)})`; ctx.lineWidth = Math.max(1, dpr);
       const n = opt.lite ? 50 : 140, wx = st.wx / 75;
       ctx.beginPath();
       for (let i = 0; i < n; i++) {
@@ -597,19 +781,23 @@
       }
       ctx.stroke();
     }
-    if (vignette) ctx.drawImage(vignette, 0, 0);
+    // 노을 + 비네트 (색이 바뀔 때만 다시 그려요)
+    const q = U.clamp(s.t / (s.stage.bossAt || 270), 0, 1.2);
+    const dusk = q > 0.35 ? Math.round(U.clamp((q - 0.35) / 0.65, 0, 1) * 12) / 12 : 0;
+    if (!vignette || dusk !== vigLv) { vignette = makeVignette(dusk); vigLv = dusk; }
+    ctx.drawImage(vignette, 0, 0, cv.width, cv.height);
     // 체력이 낮을 때 붉은 테두리
     const p = s.p, low = s.mode === 'play' ? U.clamp(1 - p.hp / p.maxHp / 0.35, 0, 1) : 0;
     cam.red = Math.max(0, cam.red - dt * 2);
     const ra = Math.max(low * (0.55 + 0.45 * Math.sin(time * 6)), cam.red * 0.8);
     if (ra > 0.01) {
-      const r = Math.hypot(cv.width, cv.height) / 2;
-      const g = ctx.createRadialGradient(cv.width / 2, cv.height / 2, r * 0.5, cv.width / 2, cv.height / 2, r);
-      g.addColorStop(0, 'rgba(255,0,40,0)'); g.addColorStop(1, `rgba(255,20,50,${0.55 * ra})`);
-      ctx.fillStyle = g; ctx.fillRect(0, 0, cv.width, cv.height);
+      if (!redEdge) redEdge = makeRedEdge();
+      ctx.globalAlpha = Math.min(1, ra);
+      ctx.drawImage(redEdge, 0, 0, cv.width, cv.height);
+      ctx.globalAlpha = 1;
     }
     if (cam.flash > 0.01) {
-      ctx.fillStyle = `rgba(${cam.flashCol},${cam.flash})`; ctx.fillRect(0, 0, cv.width, cv.height);
+      ctx.fillStyle = `rgba(${cam.flashCol},${cam.flash.toFixed(3)})`; ctx.fillRect(0, 0, cv.width, cv.height);
       cam.flash *= Math.exp(-dt * 9);
     }
   }
@@ -641,18 +829,17 @@
     K = zoom * dpr * zk;
     ox = cv.width / 2 - cam.x * K + cam.sx; oy = cv.height / 2 - cam.y * K + cam.sy;
     ctx.imageSmoothingEnabled = false;
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = (A.TILES.th && A.TILES.th.sea) || '#2a6f93';
-    ctx.fillRect(0, 0, cv.width, cv.height);
-    drawGround(s);
-    drawDecals(s);
-    drawEntities(s);
-    drawShots(s);
-    drawParts(dt);
+    const P = prof.on ? performance.now.bind(performance) : null;
+    let q0 = P ? P() : 0, q1;
+    drawGround(s); if (P) { q1 = P(); prof.ground += q1 - q0; q0 = q1; }
+    drawDecals(s); if (P) { q1 = P(); prof.decals += q1 - q0; q0 = q1; }
+    drawEntities(s); if (P) { q1 = P(); prof.ents += q1 - q0; q0 = q1; }
+    drawShots(s); if (P) { q1 = P(); prof.shots += q1 - q0; q0 = q1; }
+    drawParts(dt); if (P) { q1 = P(); prof.parts += q1 - q0; q0 = q1; }
     drawBolts(dt);
-    drawTexts(dt);
+    drawTexts(dt); if (P) { q1 = P(); prof.texts += q1 - q0; q0 = q1; }
     K = zoom * dpr;
-    drawOverlay(s, dt);
+    drawOverlay(s, dt); if (P) { q1 = P(); prof.over += q1 - q0; q0 = q1; prof.n++; }
     if (!o.noUi) { drawIndicators(s); drawJoy(); }
   }
 
@@ -667,7 +854,10 @@
 
   function reset() { parts.length = 0; texts.length = 0; rings.length = 0; sweeps.length = 0; bolts.length = 0; cam.flash = 0; cam.shake = 0; cam.red = 0; }
 
+  const prof = { on: false, ground: 0, decals: 0, ents: 0, shots: 0, parts: 0, texts: 0, over: 0, n: 0 };
   GS.render = {
+    prof,
+    stats() { return { parts: parts.length, texts: texts.length, rings: rings.length }; },
     init, resize, view, frame, fx, setOpt, reset, minimap,
     setJoy(j) { joy = j; },
     get zoom() { return zoom; },

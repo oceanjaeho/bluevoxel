@@ -1,6 +1,6 @@
 {
   "name": "bluevoxel",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "갯벌 수호대 — 손가락 하나로 즐기는 블루카본 생존 게임 (블루복셀)",
   "scripts": {

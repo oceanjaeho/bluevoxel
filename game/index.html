@@ -54,6 +54,7 @@
       <button class="arrow" id="charNext" aria-label="다음 생물"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 3 7 7-7 7"/></svg></button>
     </div>
     <div class="stages" id="stages"></div>
+    <div class="mods" id="mods"></div>
     <button class="play" id="playBtn">출동!</button>
     <p class="best" id="best"></p>
   </div>
@@ -123,7 +124,9 @@
     <div class="tabs" role="tablist">
       <button role="tab" id="tabAlly" aria-selected="true">갯벌 친구</button>
       <button role="tab" id="tabFoe" aria-selected="false">오염 몬스터</button>
+      <button role="tab" id="tabAch" aria-selected="false">업적</button>
     </div>
+    <div class="ach-list" id="achList" hidden></div>
     <div class="codex-detail" id="codexDetail"><img id="cdImg" alt=""><div><b id="cdName"></b><p id="cdText"></p></div></div>
     <div class="codex-grid" id="codexGrid"></div>
   </div>

@@ -26,6 +26,8 @@
   const CHARS = [
     { id: 'crab', name: '칠게', weapon: 'claw', hp: 110, speed: 1.0, armor: 1, tag: '단단해요',
       unlock: null },
+    { id: 'seal', name: '점박이물범', weapon: 'ball', hp: 118, speed: 1.0, tag: '통통 튀는 공',
+      unlock: { kind: 'runs', v: 1, text: '한 판 하기' } },
     { id: 'spoonbill', name: '저어새', weapon: 'sweep', hp: 108, speed: 1.12, tag: '빨라요',
       unlock: { kind: 'time', v: 180, text: '3분 버티기' } },
     { id: 'mudskipper', name: '짱뚱어', weapon: 'jump', hp: 100, speed: 1.0, area: 1.12, tag: '범위가 넓어요',
@@ -79,6 +81,24 @@
       evo: { name: '대조기', cd: 4.5, dmg: 62, rad: 320, push: 340, double: true, d: '물결이 두 번 몰아쳐요' } },
   };
 
+  Object.assign(WEAPONS, {
+    ball: { name: '물범 공', kind: 'bounce', model: 'ball', pair: 'moon',
+      lv: [{ cd: 1.5, n: 1, dmg: 14, bounces: 3, spd: 420, size: 8, range: 230 },
+           { bounces: 4 }, { n: 2 }, { dmg: 20, bounces: 5 }, { n: 3, cd: 1.25 }],
+      d: ['적 사이를 통통 튀는 공', '튕기기 +1', '공 +1', '공격 ↑ · 튕기기 +1', '공 +1 · 빠르게'],
+      evo: { name: '보름달 공', cd: 1.0, n: 3, dmg: 26, bounces: 8, spd: 480, size: 11, burst: true, range: 260, d: '튕길 때마다 펑! 아홉 번 튀어요' } },
+    bubble: { name: '해마 거품', kind: 'homing', model: 'seahorse', pair: 'coral', follower: true,
+      lv: [{ cd: 1.2, n: 2, dmg: 10, spd: 200, turn: 5, area: 22, life: 3.2 },
+           { n: 3 }, { dmg: 14 }, { n: 4, area: 28 }, { cd: 0.92, dmg: 18 }],
+      d: ['적을 따라가는 거품', '거품 +1', '공격 ↑', '거품 +1 · 범위 ↑', '빠르게 · 공격 ↑'],
+      evo: { name: '거품 폭풍', cd: 0.55, n: 5, dmg: 22, spd: 260, turn: 7, area: 34, life: 3.6, d: '거품이 폭풍처럼 쏟아져요' } },
+    ink: { name: '낙지 먹물', kind: 'cloud', model: 'nakji', pair: 'kelp', follower: true,
+      lv: [{ cd: 2.9, n: 1, dmg: 8, rad: 52, life: 3, tick: 0.4, slow: 0.4 },
+           { n: 2 }, { dmg: 11, rad: 60 }, { life: 4 }, { n: 3, cd: 2.3 }],
+      d: ['느려지는 먹물 구름', '구름 +1', '공격 ↑ · 범위 ↑', '오래 남아요', '구름 +1 · 빠르게'],
+      evo: { name: '먹물 소용돌이', cd: 1.7, n: 3, dmg: 16, rad: 82, life: 4.5, tick: 0.35, slow: 0.55, pull: true, d: '적을 빨아들이는 소용돌이' } },
+  });
+
   // ── 패시브(갯벌의 힘) ─────────────────────────────────────
   const PASSIVES = {
     mud:      { name: '갯벌 진흙', model: 'mudblock', d: '최대 체력 +15%', stat: 'hp', v: 0.15 },
@@ -89,6 +109,9 @@
     flow:     { name: '해류',     model: 'flow',     d: '범위·속도 +8%', stat: 'area', v: 0.08 },
     oyster:   { name: '굴 껍데기', model: 'oyster',  d: '받는 피해 -1', stat: 'armor', v: 1 },
     nutrient: { name: '영양염',   model: 'sprout',   d: '공격력 +10%', stat: 'might', v: 0.10 },
+    moon:     { name: '보름달',   model: 'moon',     d: '치명타 +5%', stat: 'crit', v: 0.05 },
+    kelp:     { name: '해초',     model: 'kelp',     d: '지속 시간 +15%', stat: 'dur', v: 0.15 },
+    coral:    { name: '산호',     model: 'coral',    d: '3·5단계에 개수 +1', stat: 'amount', v: 1 },
   };
 
   // ── 오염 몬스터 ─────────────────────────────────────────
@@ -104,7 +127,15 @@
     urchin: { name: '성게', hp: 30, spd: 30, dmg: 14, r: 12, xp: 3, mass: 2.5, beh: 'chase', model: 'urchin', col: ['#3b2340', '#7a4a86'] },
     jelly:  { name: '해파리', hp: 14, spd: 48, dmg: 8, r: 11, xp: 2, mass: 0.8, beh: 'drift', model: 'jelly', col: ['#f7a8d0', '#ffd6ea'] },
     barrel: { name: '기름통', hp: 40, spd: 30, dmg: 12, r: 13, xp: 4, mass: 3, beh: 'chase', blast: true, model: 'barrel', col: ['#7a3b2a', '#f2c037'] },
+    algae:  { name: '녹조 덩어리', hp: 24, spd: 42, dmg: 9, r: 12, xp: 3, mass: 2, beh: 'chase', split: 'algaeS', pollute: true, model: 'algae', col: ['#4a9238', '#a8e070'] },
+    algaeS: { name: '녹조 방울', hp: 8, spd: 64, dmg: 5, r: 8, xp: 1, mass: 0.8, beh: 'chase', pollute: true, model: 'algaeS', col: ['#5fae45', '#a8e070'] },
+    tire:   { name: '폐타이어', hp: 34, spd: 36, dmg: 11, r: 13, xp: 4, mass: 4, beh: 'charge', roll: true, model: 'tire', col: ['#252527', '#8a8f94'] },
+    starfish: { name: '불가사리', hp: 34, spd: 32, dmg: 11, r: 13, xp: 4, mass: 2.5, beh: 'chase', split: 'starS', spin: true, model: 'starfish', col: ['#e2603a', '#ffc07a'] },
+    starS:  { name: '작은 불가사리', hp: 10, spd: 52, dmg: 6, r: 9, xp: 1, mass: 1, beh: 'chase', spin: true, model: 'starS', col: ['#e2603a', '#ffc07a'] },
+    heat:   { name: '열덩이', hp: 20, spd: 46, dmg: 10, r: 11, xp: 3, mass: 1, beh: 'drift', pollute: true, model: 'heat', col: ['#ff9a3c', '#ffd23f'] },
     // 보스
+    algaeKing: { name: '녹조 괴물', hp: 9000, spd: 38, dmg: 22, r: 40, xp: 0, mass: 60, beh: 'algae', boss: true, model: 'algaeKing', col: ['#4a9238', '#c8f08a'] },
+    heatDome: { name: '바다 열돔', hp: 10000, spd: 36, dmg: 24, r: 40, xp: 0, mass: 60, beh: 'heat', boss: true, model: 'heatDome', col: ['#ff9a3c', '#ffd23f'] },
     dozer:  { name: '매립 불도저', hp: 7500, spd: 50, dmg: 22, r: 34, xp: 0, mass: 50, beh: 'dozer', boss: true, model: 'dozer', col: ['#f2b632', '#2b2b2b'] },
     octo:   { name: '유령그물 문어', hp: 10000, spd: 42, dmg: 20, r: 36, xp: 0, mass: 50, beh: 'octo', boss: true, model: 'octo', col: ['#a8476b', '#3f7f5a'] },
     tanker: { name: '검은 유조선', hp: 10000, spd: 32, dmg: 24, r: 42, xp: 0, mass: 60, beh: 'tanker', boss: true, model: 'tanker', col: ['#2a2a2e', '#9a2f2f'] },
@@ -132,6 +163,47 @@
       dens: [[0, 9, 1.05, 1], [60, 28, 0.8, 2], [120, 46, 0.66, 3], [180, 64, 0.56, 3], [240, 84, 0.5, 4], [270, 42, 0.9, 2], [330, 84, 0.5, 4]],
       events: [{ t: 55, k: 'ring', e: 'oilS', n: 26 }, { t: 115, k: 'elite', e: 'barrel' }, { t: 150, k: 'swarm', e: 'micro', n: 40 },
                { t: 180, k: 'storm', dur: 22 }, { t: 212, k: 'elite', e: 'oil' }, { t: 240, k: 'ring', e: 'bottle', n: 22 }, { t: 270, k: 'boss' }] },
+  ];
+
+  STAGES.push(
+    { id: 4, key: 'estuary', name: '하구', sub: '강과 바다가 만나는 곳', boss: 'algaeKing', bossAt: 270, hpMul: 1.55, dmgMul: 1.25,
+      mix: [[0, { algaeS: 3, bag: 7 }], [30, { algae: 2, algaeS: 3, bag: 5, bottle: 2 }], [70, { algae: 3, algaeS: 3, tire: 2, bottle: 2, bag: 4 }],
+            [120, { algae: 4, algaeS: 3, tire: 3, bottle: 3, smog: 2, micro: 3 }], [180, { algae: 5, algaeS: 3, tire: 3, bottle: 3, smog: 3, micro: 4, foam: 2 }]],
+      dens: [[0, 9, 1.05, 1], [60, 28, 0.8, 2], [120, 46, 0.66, 3], [180, 64, 0.56, 3], [240, 84, 0.5, 4], [270, 42, 0.9, 2], [330, 84, 0.5, 4]],
+      events: [{ t: 55, k: 'ring', e: 'algaeS', n: 26 }, { t: 115, k: 'elite', e: 'tire' }, { t: 150, k: 'swarm', e: 'micro', n: 40 },
+               { t: 180, k: 'storm', dur: 22 }, { t: 212, k: 'elite', e: 'algae' }, { t: 240, k: 'ring', e: 'tire', n: 14 }, { t: 270, k: 'boss' }] },
+    { id: 5, key: 'reef', name: '제주 바다', sub: '연산호 바다', boss: 'heatDome', bossAt: 270, hpMul: 1.9, dmgMul: 1.4,
+      mix: [[0, { jelly: 6, starS: 4 }], [30, { jelly: 5, starfish: 3, starS: 3, micro: 3 }], [70, { jelly: 4, starfish: 3, heat: 3, net: 2, micro: 3 }],
+            [120, { jelly: 4, starfish: 4, heat: 4, net: 3, micro: 4 }], [180, { jelly: 4, starfish: 4, heat: 5, net: 3, micro: 4, urchin: 3 }]],
+      dens: [[0, 9, 1.05, 1], [60, 28, 0.8, 2], [120, 46, 0.66, 3], [180, 64, 0.56, 3], [240, 84, 0.5, 4], [270, 42, 0.9, 2], [330, 84, 0.5, 4]],
+      events: [{ t: 55, k: 'ring', e: 'jelly', n: 24 }, { t: 115, k: 'elite', e: 'starfish' }, { t: 150, k: 'swarm', e: 'micro', n: 44 },
+               { t: 180, k: 'storm', dur: 22 }, { t: 212, k: 'elite', e: 'heat' }, { t: 240, k: 'ring', e: 'starS', n: 30 }, { t: 270, k: 'boss' }] },
+  );
+  // 별 등급: 별 하나마다 몬스터가 강해지고 진주를 더 받아요
+  const STARS = { max: 5, hp: 0.35, dmg: 0.12, dens: 0.08, pearls: 0.3 };
+
+  // ── 업적 ─────────────────────────────────────────────
+  const ACH = [
+    { id: 'run1', name: '첫 출동', d: '한 판 하기', reward: 30, kind: 'runs', v: 1 },
+    { id: 'run10', name: '단골 수호대', d: '10판 하기', reward: 120, kind: 'runs', v: 10 },
+    { id: 'clear1', name: '갯벌 지킴이', d: '갯벌 클리어', reward: 100, kind: 'clear', v: 1 },
+    { id: 'clear2', name: '바다숲 지킴이', d: '바다숲 클리어', reward: 150, kind: 'clear', v: 2 },
+    { id: 'clear3', name: '기름 바다 청소부', d: '기름 바다 클리어', reward: 200, kind: 'clear', v: 3 },
+    { id: 'clear4', name: '하구 지킴이', d: '하구 클리어', reward: 250, kind: 'clear', v: 4 },
+    { id: 'clear5', name: '제주 바다 지킴이', d: '제주 바다 클리어', reward: 300, kind: 'clear', v: 5 },
+    { id: 'kill1k', name: '천 마리', d: '한 판에 1,000 처치', reward: 60, kind: 'kills', v: 1000 },
+    { id: 'kill4k', name: '사천 마리', d: '한 판에 4,000 처치', reward: 200, kind: 'kills', v: 4000 },
+    { id: 'evo1', name: '첫 진화', d: '진화 한 번', reward: 60, kind: 'evo', v: 1 },
+    { id: 'evo3', name: '진화 박사', d: '한 판에 진화 3번', reward: 180, kind: 'evo', v: 3 },
+    { id: 'lv30', name: '레벨 30', d: '한 판에 레벨 30', reward: 120, kind: 'level', v: 30 },
+    { id: 'carbon10k', name: '탄소 만 톤', d: '한 판에 블루카본 10,000t', reward: 150, kind: 'carbon', v: 10000 },
+    { id: 'green60', name: '초록 물결', d: '보스 전에 복원 60%', reward: 120, kind: 'green', v: 0.6 },
+    { id: 'storm', name: '태풍을 이긴 게', d: '태풍 끝까지 버티기', reward: 50, kind: 'storm', v: 1 },
+    { id: 'star3', name: '별 셋', d: '아무 스테이지 ★3 클리어', reward: 200, kind: 'star', v: 3 },
+    { id: 'star5', name: '별 다섯', d: '아무 스테이지 ★5 클리어', reward: 500, kind: 'star', v: 5 },
+    { id: 'endless10', name: '끝없는 밀물', d: '무한 모드 10분 버티기', reward: 300, kind: 'endless', v: 600 },
+    { id: 'friends', name: '수호대 완성', d: '생물 친구 5종 모두', reward: 300, kind: 'chars', v: 5 },
+    { id: 'codex30', name: '도감 박사', d: '도감 30칸 채우기', reward: 200, kind: 'codex', v: 30 },
   ];
 
   // ── 기지(영구 강화) ───────────────────────────────────────
@@ -184,7 +256,22 @@
     octo: '바다에 버려진 그물과 밧줄은 오랫동안 생물을 위협해요.',
     tanker: '기름 유출은 바다와 갯벌을 오랫동안 아프게 해요.',
     getbol: '우리나라 갯벌은 2021년 유네스코 세계자연유산이 되었어요.',
+    seal: '점박이물범은 봄부터 가을까지 백령도 바다를 찾는 천연기념물이에요.',
+    ball: '점박이물범은 몸에 둥근 점무늬가 있어서 이런 이름이 붙었어요.',
+    bubble: '해마는 아빠가 배 주머니에서 새끼를 키워요.',
+    ink: '낙지는 위험할 때 먹물을 뿜고 몸 색을 바꿔 숨어요.',
+    moon: '달이 바닷물을 끌어당겨서 밀물과 썰물이 생겨요.',
+    kelp: '해초 숲은 물고기의 집이자 어린 생물이 자라는 곳이에요.',
+    coral: '제주 바다에는 알록달록한 연산호 군락이 있어요.',
+    algae: '물이 고이고 따뜻해지며 영양분이 넘치면 녹조가 생겨요.',
+    algaeS: '녹조가 썩으면 물속 산소가 줄어 물고기가 살기 어려워요.',
+    tire: '타이어가 닳으면서 나온 가루도 미세플라스틱이 돼요.',
+    starfish: '불가사리는 잘린 팔이 다시 자라기도 해요.',
+    starS: '불가사리가 너무 많아지면 조개가 크게 줄기도 해요.',
+    heat: '바다가 너무 뜨거워지면 산호가 하얗게 변하는 백화 현상이 생겨요.',
+    algaeKing: '강 하구는 민물과 바닷물이 섞여 생물이 아주 많은 곳이에요.',
+    heatDome: '바닷물 온도가 크게 오르면 산호와 바다 생물이 큰 피해를 입어요.',
   };
 
-  GS.DATA = { CHARS, WEAPONS, PASSIVES, ENEMIES, STAGES, UPGRADES, FACTS };
+  GS.DATA = { CHARS, WEAPONS, PASSIVES, ENEMIES, STAGES, UPGRADES, FACTS, ACH, STARS };
 })(typeof window !== 'undefined' ? window : globalThis);
