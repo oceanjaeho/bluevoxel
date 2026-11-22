@@ -25,7 +25,12 @@
     H = handlers; meta = m;
     const ic = (id, name, size) => { const e = $(id); if (e) e.src = A.icon(name, size || 48); };
     ic('icKill', 'skull', 40); ic('icCarbon', 'gem1', 40); ic('icPearl', 'pearl', 48); ic('icPearl2', 'pearl', 64); ic('icPearl3', 'pearl', 48);
-    ic('icShop', 'chest', 56); ic('icCodex', 'seagrass', 56);
+    ic('icShop', 'chest', 56); ic('icCodex', 'seagrass', 56); ic('icDaily', 'sun', 56); ic('icLeaf', 'reed', 36);
+    const tk = $('restTicks');
+    tk.innerHTML = D.MILESTONES.map((m, i) => `<em data-i="${i}" style="left:${m.v * 100}%"></em>`).join('');
+    $('dailyBtn').onclick = () => H.openDaily();
+    $('dailyClose').onclick = () => show('daily', false);
+    $('dailyGo').onclick = () => H.startDaily();
     $('charPrev').onclick = () => H.pickChar(-1);
     $('charNext').onclick = () => H.pickChar(1);
     $('playBtn').onclick = () => H.play();
@@ -56,7 +61,7 @@
   function renderTitle() {
     const ch = D.CHARS.find(c => c.id === meta.char) || D.CHARS[0];
     const ok = charUnlocked(ch);
-    $('charImg').src = ok ? A.icon(ch.id, 192) : A.silhouette(ch.id, 192);
+    $('charImg').src = ok ? A.icon(A.withAcc(ch.id, meta.acc && meta.acc.on), 192) : A.silhouette(ch.id, 192);
     $('charName').textContent = ok ? ch.name : '???';
     $('charTag').innerHTML = ok ? ch.tag + ' · ' + D.WEAPONS[ch.weapon].name : LOCK + ' ' + ch.unlock.text;
     $('charCard').classList.toggle('locked', !ok);
@@ -105,7 +110,11 @@
 
   // ── 게임 중 표시 ───────────────────────────────────────
   const hs = { lv: -1, xp: -1, sec: -1, kills: -1, carbon: -1, carbonT: 0, slots: '', boss: false, bossHp: -1 };
-  function resetHud() { hs.lv = hs.xp = hs.sec = hs.kills = hs.carbon = hs.bossHp = -1; hs.slots = ''; hs.boss = false; $('bossbar').hidden = true; $('alert').hidden = true; $('tip').hidden = true; }
+  function resetHud() {
+    hs.lv = hs.xp = hs.sec = hs.kills = hs.carbon = hs.bossHp = hs.green = hs.combo = -1; hs.slots = ''; hs.buffs = ''; hs.boss = false;
+    $('bossbar').hidden = true; $('alert').hidden = true; $('tip').hidden = true; $('combo').hidden = true;
+    $('restTicks').querySelectorAll('em').forEach(e => e.classList.remove('got'));
+  }
   function hud(s, now) {
     const p = s.p;
     const q = U.clamp(p.xp / p.xpNext, 0, 1);
@@ -134,6 +143,26 @@
       for (const k in s.passives) rp.appendChild(el('span', 'slot p', `<img src="${A.icon(D.PASSIVES[k].model, 48)}" alt="${D.PASSIVES[k].name}"><i>${s.passives[k]}</i>`));
       box.appendChild(rw);
       if (rp.childNodes.length) box.appendChild(rp);
+    }
+    const gr = Math.round(s.green * 1000) / 1000;
+    if (gr !== hs.green) {
+      $('restPct').textContent = Math.round(gr * 100) + '%';
+      $('restFill').style.transform = `scaleX(${Math.min(1, gr).toFixed(3)})`;
+      hs.green = gr;
+    }
+    if (s.combo !== hs.combo) {
+      const c = $('combo');
+      c.hidden = s.combo < 10;
+      if (s.combo >= 10) { $('comboN').textContent = s.combo; c.classList.toggle('hot', s.combo >= 100); }
+      hs.combo = s.combo;
+    }
+    const bk = (s.p.sprintT > 0 ? 'f' + Math.ceil(s.p.sprintT) : '') + (s.freezeT > 0 ? 'z' + Math.ceil(s.freezeT) : '');
+    if (bk !== hs.buffs) {
+      hs.buffs = bk;
+      const bb = $('buffs');
+      bb.innerHTML = '';
+      if (s.p.sprintT > 0) bb.appendChild(el('span', 'buff', `<img src="${A.icon('feather', 36)}" alt="">${Math.ceil(s.p.sprintT)}`));
+      if (s.freezeT > 0) bb.appendChild(el('span', 'buff', `<img src="${A.icon('shell', 36)}" alt="">${Math.ceil(s.freezeT)}`));
     }
     const b = s.boss;
     if (!!b !== hs.boss) {
@@ -193,6 +222,17 @@
         else if (e.id === 'rage') alert('분노!', 'red');
         break;
       case 'boss': alert(D.ENEMIES[e.type].name, 'red', '갯벌을 지켜요!'); break;
+      case 'milestone': {
+        const m = D.MILESTONES[e.i];
+        alert(`갯벌 ${Math.round(m.v * 100)}%`, 'green', m.name);
+        const t = $('restTicks').querySelector(`em[data-i="${e.i}"]`);
+        if (t) t.classList.add('got');
+        const r = $('restore'); r.classList.remove('pulse'); void r.offsetWidth; r.classList.add('pulse');
+        break;
+      }
+      case 'combo': { const c = $('combo'); c.classList.remove('bump'); void c.offsetWidth; c.classList.add('bump'); break; }
+      case 'freeze': alert('소라 나팔!', 'gold', '몬스터가 멈췄어요'); break;
+      case 'feather': alert('깃털 질주!', 'blue'); break;
       case 'evo': alert('진화!', 'pink', D.WEAPONS[e.id].evo.name); break;
       case 'revive': alert('부활!', 'green'); break;
       case 'bosskill': alert('갯벌을 지켰어요!', 'green'); break;
@@ -322,7 +362,30 @@
       g.appendChild(b);
     }
   }
-  function openShop() { renderShop(); show('shop', true); }
+  function renderAcc() {
+    const g = $('accGrid');
+    g.innerHTML = '';
+    const acc = meta.acc || { owned: {}, on: null };
+    for (const a of D.ACC) {
+      const own = !!acc.owned[a.id], on = acc.on === a.id;
+      const b = el('button', 'up' + (on ? ' on' : own ? '' : meta.pearls < a.cost ? ' poor' : ''));
+      b.innerHTML = `<img src="${A.icon(A.withAcc(meta.char, a.id), 64)}" alt=""><b>${a.name}</b><small>${on ? '쓰는 중' : own ? '눌러서 쓰기' : '모든 생물에게 어울려요'}</small>` +
+        (own ? `<span class="cost">${on ? '벗기' : '쓰기'}</span>` : `<span class="cost"><img src="${A.icon('pearl', 32)}" alt="진주">${U.fmtNum(a.cost)}</span>`);
+      b.onclick = () => H.buyAcc(a.id, b);
+      g.appendChild(b);
+    }
+  }
+  function openShop() { renderShop(); renderAcc(); show('shop', true); }
+  function openDaily(info, state) {
+    const st = D.STAGES.find(x => x.id === info.stage), ch = D.CHARS.find(c => c.id === info.char);
+    $('dailyDate').textContent = info.key;
+    $('dailyChar').src = A.icon(A.withAcc(ch.id, meta.acc && meta.acc.on), 128);
+    $('dailyStage').textContent = `${st.id}단계 ${st.name}`;
+    $('dailyCharName').textContent = ch.name + '(으)로 출동';
+    $('dailyMods').innerHTML = info.mods.map(id => { const m = D.MODS.find(x => x.id === id); return `<li><b>${m.name}</b><span>${m.d}</span></li>`; }).join('');
+    $('dailyNote').textContent = state.claimed ? `오늘 최고 ${U.fmtTime(state.best || 0)} · 보상은 받았어요` : '오늘 처음 끝내면 진주 80 (클리어하면 160)';
+    show('daily', true);
+  }
 
   // ── 도감 ─────────────────────────────────────────────
   let codexTab = 'ally';
@@ -380,6 +443,6 @@
 
   GS.ui = {
     init, show, isOpen, showTitle, renderTitle, showHud, hud, fx, alert, tip, toast, hint,
-    openLevelUp, openChest, openPause, openResult, openShop, renderShop, openCodex, itemInfo,
+    openLevelUp, openChest, openPause, openResult, openShop, renderShop, renderAcc, openCodex, openDaily, itemInfo,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

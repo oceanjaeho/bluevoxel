@@ -175,3 +175,61 @@ test('새 캐릭터 점박이물범은 물범 공으로 시작해요', () => {
   assert.equal(s.weapons[0].id, 'ball');
   assert.equal(s.ch.name, '점박이물범');
 });
+
+test('쓰레기 더미를 부수면 아이템이 나오고 주변이 깨끗해져요 (처치 수에는 안 들어가요)', () => {
+  const s = sim.newRun({ seed: 41 });
+  const prop = s.enemies.find(e => e.def.prop);
+  assert.ok(prop, '판이 시작되면 쓰레기 더미가 있어요');
+  assert.ok(s.propCount >= 10);
+  const c0 = s.map.clean, k0 = s.kills, n0 = s.items.length;
+  sim.hitEnemy(s, prop, 1e6, 0, 0, 'test');
+  assert.ok(prop.dead);
+  assert.equal(s.kills, k0);
+  assert.equal(s.items.length, n0 + 1);
+  assert.ok(s.map.clean > c0);
+});
+
+test('회색 땅에서 솟아나기 전에 그 자리를 살리면 몬스터가 안 나와요', () => {
+  const s = sim.newRun({ seed: 43 });
+  const T = C.T;
+  let x = 0, y = 0;
+  for (let i = 0; i < s.map.tiles.length; i++) if (s.map.tiles[i] === GS.TILE.DIRTY) { x = (i % C.MAP_W) * T + T / 2; y = Math.floor(i / C.MAP_W) * T + T / 2; break; }
+  s.pend.push({ x, y, type: 'bag', t: 0.05, max: 0.9, n: 1, dead: false });
+  sim.restoreAt(s, x, y, 20);
+  const n0 = s.enemies.length;
+  sim.step(s, C.DT, { x: 0, y: 0 }); sim.step(s, C.DT, { x: 0, y: 0 }); sim.step(s, C.DT, { x: 0, y: 0 }); sim.step(s, C.DT, { x: 0, y: 0 });
+  assert.ok(s.fx.some(e => e.k === 'cancel'), '취소돼요');
+  assert.ok(s.enemies.filter(e => e.type === 'bag' && Math.hypot(e.x - x, e.y - y) < 30).length === 0);
+  void n0;
+});
+
+test('갯벌 복원율이 단계를 넘으면 보상이 열려요', () => {
+  const s = sim.newRun({ seed: 45 });
+  let changed = 0;
+  for (let i = 0; i < s.map.tiles.length && s.map.clean / s.map.land < 0.32; i++) if (s.map.tiles[i] === GS.TILE.DIRTY) { s.map.tiles[i] = GS.TILE.MUD; s.map.clean++; changed++; }
+  for (let k = 0; k < 20; k++) { sim.step(s, C.DT, { x: 0, y: 0 }); if (s.mode === 'levelup') { sim.choose(s, 0); } }
+  assert.ok(changed > 0);
+  assert.ok(s.mIdx >= 2, 'mIdx ' + s.mIdx);
+  assert.ok(s.items.some(it => it.k === 'chest'), '30% 보물 상자');
+});
+
+test('큰 물결은 화면 속 몬스터를 쓸어가고, 소라 나팔은 몬스터를 멈춰요', () => {
+  const s = sim.newRun({ seed: 47 });
+  for (let k = 0; k < 10; k++) sim.spawnEnemy(s, 'bag', s.p.x + 120 + k * 8, s.p.y + 40);
+  const before = s.kills;
+  sim.dropItem(s, 'bomb', s.p.x, s.p.y);
+  sim.step(s, C.DT, { x: 0, y: 0 });
+  assert.ok(s.kills >= before + 10);
+  const e = sim.spawnEnemy(s, 'bag', s.p.x + 200, s.p.y);
+  sim.dropItem(s, 'freeze', s.p.x, s.p.y);
+  sim.step(s, C.DT, { x: 0, y: 0 });
+  const x0 = e.x;
+  for (let k = 0; k < 30; k++) sim.step(s, C.DT, { x: 0, y: 0 });
+  assert.ok(Math.abs(e.x - x0) < 1, '멈춰 있어요');
+});
+
+test('오늘의 도전 규칙: 유리 대포는 체력을 줄이고 공격력을 올려요', () => {
+  const a = sim.newRun({ seed: 49 }), b = sim.newRun({ seed: 49, mods: ['glass'] });
+  assert.ok(b.p.maxHp < a.p.maxHp);
+  assert.ok(b.p.might > a.p.might);
+});

@@ -6,7 +6,7 @@
   const st = { sfx: true, music: true };
   const last = {};
   let combo = 0, comboT = 0;
-  const THR = { boing: 0.05, pop: 0.04, bubble: 0.15, ink: 0.2, hit: 0.035, kill: 0.03, gem: 0.022, shoot: 0.07, sweep: 0.08, splash: 0.06, dash: 0.12, erupt: 0.05, jump: 0.12,
+  const THR = { emerge: 0.12, cancel: 0.1, break: 0.05, combo: 0.2, boing: 0.05, pop: 0.04, bubble: 0.15, ink: 0.2, hit: 0.035, kill: 0.03, gem: 0.022, shoot: 0.07, sweep: 0.08, splash: 0.06, dash: 0.12, erupt: 0.05, jump: 0.12,
     mine: 0.2, pave: 0.12, emit: 0.3, bloom: 0.3, hurt: 0.1, drip: 0.08, bolt: 0.1, slam: 0.05 };
 
   function init() {
@@ -141,6 +141,15 @@
       case 'ink': nz({ dur: 0.18, vol: 0.07, ft: 'lowpass', f: 600, f2: 200 }); break;
       case 'heatPulse': nz({ dur: 0.7, vol: 0.12, ft: 'lowpass', f: 300, f2: 1400 }); tone({ f: 110, f2: 70, type: 'sawtooth', dur: 0.6, vol: 0.06, lp: 600 }); break;
       case 'bloomBoss': nz({ dur: 0.4, vol: 0.1, ft: 'lowpass', f: 500, f2: 150 }); tone({ f: 90, f2: 50, dur: 0.35, vol: 0.14 }); break;
+      case 'milestone': [0, 4, 7, 12, 16, 19].forEach((n, i) => tone({ f: N(72 + n), type: 'triangle', t: i * 0.06, dur: 0.4, vol: 0.07 })); nz({ t: 0.2, dur: 0.6, vol: 0.05, ft: 'highpass', f: 6000 }); break;
+      case 'bomb': nz({ dur: 1.0, vol: 0.18, ft: 'lowpass', f: 300, f2: 3000 }); tone({ f: 90, f2: 40, dur: 0.6, vol: 0.22 }); break;
+      case 'freeze': tone({ f: 196, f2: 220, type: 'sawtooth', dur: 0.9, vol: 0.08, lp: 900, a: 0.05 }); tone({ f: 294, f2: 330, type: 'triangle', dur: 0.9, vol: 0.05, a: 0.05 }); break;
+      case 'coin': [0, 7, 12].forEach((n, i) => tone({ f: N(84 + n), type: 'square', t: i * 0.05, dur: 0.1, vol: 0.04, lp: 4000 })); break;
+      case 'feather': nz({ dur: 0.5, vol: 0.08, ft: 'highpass', f: 1500, f2: 6000 }); tone({ f: 600, f2: 1400, type: 'triangle', dur: 0.4, vol: 0.05 }); break;
+      case 'combo': tone({ f: 880, f2: 1320, type: 'square', dur: 0.12, vol: 0.05, lp: 3000 }); tone({ f: 1320, type: 'triangle', t: 0.1, dur: 0.18, vol: 0.05 }); break;
+      case 'break': nz({ dur: 0.25, vol: 0.12, f: 1200, q: 0.8 }); tone({ f: 260, f2: 120, type: 'square', dur: 0.14, vol: 0.05, lp: 1500 }); break;
+      case 'emerge': tone({ f: 110, f2: 70, dur: 0.25, vol: 0.06 }); nz({ dur: 0.2, vol: 0.05, ft: 'lowpass', f: 400 }); break;
+      case 'cancel': tone({ f: 990, f2: 1480, dur: 0.12, vol: 0.04 }); break;
       case 'start': [0, 7, 12].forEach((n, i) => tone({ f: N(60 + n), type: 'square', t: i * 0.08, dur: 0.2, vol: 0.06, lp: 2400 })); break;
     }
   }

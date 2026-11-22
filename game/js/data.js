@@ -11,7 +11,11 @@
     MAX_W: 6, MAX_P: 6, MAX_LV: 5,
     ENEMY_CAP: 260, GEM_CAP: 300,
     CRIT: 0.06, CRIT_MUL: 2,
-    MARSH_REGEN: 1.5,              // 복원된 염습지·잘피 위에서 초당 회복
+    MARSH_REGEN: 2.2,              // 복원된 염습지·잘피 위에서 초당 회복
+    MARSH_HASTE: 1.2,              // 초록 갯벌 위에서 공격이 빨라지는 배율
+    MARSH_SLOW: 0.8,               // 초록 갯벌 위에서 몬스터가 느려지는 배율
+    EMERGE: 0.35,                  // 화면 안 회색 땅에서 솟아나는 몬스터 비율
+    PROPS: 14, PROP_MAX: 16, PROP_EVERY: 22,
     GROW_MIN: 4, GROW_MAX: 9,      // 갯벌 → 염습지로 자라는 시간(초)
     RESTORE_R: 30,                 // 처치 지점 복원 반경(px) — 몬스터 크기만큼 더해져요
   };
@@ -132,6 +136,7 @@
     tire:   { name: '폐타이어', hp: 34, spd: 36, dmg: 11, r: 13, xp: 4, mass: 4, beh: 'charge', roll: true, model: 'tire', col: ['#252527', '#8a8f94'] },
     starfish: { name: '불가사리', hp: 34, spd: 32, dmg: 11, r: 13, xp: 4, mass: 2.5, beh: 'chase', split: 'starS', spin: true, model: 'starfish', col: ['#e2603a', '#ffc07a'] },
     starS:  { name: '작은 불가사리', hp: 10, spd: 52, dmg: 6, r: 9, xp: 1, mass: 1, beh: 'chase', spin: true, model: 'starS', col: ['#e2603a', '#ffc07a'] },
+    trash:  { name: '쓰레기 더미', hp: 26, spd: 0, dmg: 0, r: 13, xp: 0, mass: 99, beh: 'static', prop: true, model: 'trash', col: ['#9fd3ea', '#d9534f', '#eef3f6'] },
     heat:   { name: '열덩이', hp: 20, spd: 46, dmg: 10, r: 11, xp: 3, mass: 1, beh: 'drift', pollute: true, model: 'heat', col: ['#ff9a3c', '#ffd23f'] },
     // 보스
     algaeKing: { name: '녹조 괴물', hp: 9000, spd: 38, dmg: 22, r: 40, xp: 0, mass: 60, beh: 'algae', boss: true, model: 'algaeKing', col: ['#4a9238', '#c8f08a'] },
@@ -179,6 +184,43 @@
       events: [{ t: 55, k: 'ring', e: 'jelly', n: 24 }, { t: 115, k: 'elite', e: 'starfish' }, { t: 150, k: 'swarm', e: 'micro', n: 44 },
                { t: 180, k: 'storm', dur: 22 }, { t: 212, k: 'elite', e: 'heat' }, { t: 240, k: 'ring', e: 'starS', n: 30 }, { t: 270, k: 'boss' }] },
   );
+  // 갯벌 복원 단계 보상
+  const MILESTONES = [
+    { v: 0.15, k: 'xp', name: '생명이 돌아와요', d: '바로 레벨 업' },
+    { v: 0.30, k: 'chest', name: '보물 상자', d: '상자가 떨어져요' },
+    { v: 0.45, k: 'birds', name: '저어새 떼', d: '새들이 몬스터를 휩쓸어요' },
+    { v: 0.60, k: 'heal', name: '갯벌의 선물', d: '체력 회복 + 보물 상자' },
+    { v: 0.75, k: 'tide', name: '대조기', d: '큰 물결이 몬스터를 쓸어가요' },
+  ];
+  // 떨어지는 아이템
+  const ITEMS = {
+    heal:    { name: '하트', model: 'heart', col: '255,90,120', d: '체력 30% 회복' },
+    magnet:  { name: '자석', model: 'magnet', col: '120,190,255', d: '결정을 모두 끌어와요' },
+    bomb:    { name: '큰 물결', model: 'tidewave', col: '110,210,255', d: '화면 속 몬스터를 쓸어가요' },
+    freeze:  { name: '소라 나팔', model: 'shell', col: '255,200,150', d: '몬스터가 6초 동안 멈춰요' },
+    pouch:   { name: '진주 주머니', model: 'pouch', col: '255,240,210', d: '진주를 얻어요' },
+    feather: { name: '저어새 깃털', model: 'feather', col: '235,245,255', d: '8초 동안 빠르고 무적' },
+    chest:   { name: '보물 상자', model: 'chest', col: '255,210,90', d: '강화를 얻어요' },
+  };
+  const DROP_PROP = { heal: 3, magnet: 2, bomb: 1.4, freeze: 1.4, pouch: 2.6, feather: 1.3 };
+  const DROP_KILL = { heal: 0.011, magnet: 0.0035, bomb: 0.0015, freeze: 0.0015, pouch: 0.0012, feather: 0.0012 };
+  const COMBO_STEPS = [50, 100, 200, 300, 500, 800, 1200];
+  // 오늘의 도전 규칙
+  const MODS = [
+    { id: 'fast', name: '날쌘 몬스터', d: '몬스터 속도 +20%' },
+    { id: 'tough', name: '단단한 몬스터', d: '몬스터 체력 +35%' },
+    { id: 'horde', name: '몬스터 무리', d: '몬스터 수 +30%' },
+    { id: 'magnet', name: '강한 자석', d: '끌어당기기 2배' },
+    { id: 'loot', name: '쓰레기 대청소', d: '쓰레기 더미 2배' },
+    { id: 'glass', name: '유리 대포', d: '공격력 +40%, 체력 -30%' },
+    { id: 'growth', name: '빠른 성장', d: '경험치 +30%' },
+  ];
+  // 꾸미기
+  const ACC = [
+    { id: 'straw', name: '밀짚모자', cost: 300 },
+    { id: 'shades', name: '선글라스', cost: 300 },
+    { id: 'crown', name: '왕관', cost: 800 },
+  ];
   // 별 등급: 별 하나마다 몬스터가 강해지고 진주를 더 받아요
   const STARS = { max: 5, hp: 0.35, dmg: 0.12, dens: 0.08, pearls: 0.3 };
 
@@ -273,5 +315,6 @@
     heatDome: '바닷물 온도가 크게 오르면 산호와 바다 생물이 큰 피해를 입어요.',
   };
 
-  GS.DATA = { CHARS, WEAPONS, PASSIVES, ENEMIES, STAGES, UPGRADES, FACTS, ACH, STARS };
+  FACTS.trash = '갯벌 쓰레기를 치우면 그 자리에 생물이 다시 숨을 쉬어요.';
+  GS.DATA = { CHARS, WEAPONS, PASSIVES, ENEMIES, STAGES, UPGRADES, FACTS, ACH, STARS, MILESTONES, ITEMS, DROP_PROP, DROP_KILL, COMBO_STEPS, MODS, ACC };
 })(typeof window !== 'undefined' ? window : globalThis);

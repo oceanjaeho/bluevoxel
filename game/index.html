@@ -20,15 +20,21 @@
     <div class="hud-left">
       <b class="lv" id="lvBadge">1</b>
       <div class="slots" id="slots"></div>
+      <div class="buffs" id="buffs"></div>
     </div>
     <div class="hud-mid">
       <div class="clock" id="clock">0:00</div>
+      <div class="restore" id="restore" aria-label="갯벌 복원율">
+        <span class="rlabel"><img id="icLeaf" alt="">갯벌 <b id="restPct">0%</b></span>
+        <div class="rbar"><i id="restFill"></i><span class="ticks" id="restTicks"></span></div>
+      </div>
       <div class="bossbar" id="bossbar" hidden><span id="bossName"></span><div class="bb"><i id="bossFill"></i></div></div>
     </div>
     <div class="hud-right">
       <div class="counters">
         <span class="cnt"><img id="icKill" alt="처치"><b id="kills">0</b></span>
         <span class="cnt carbon"><img id="icCarbon" alt="블루카본"><b id="carbon">0</b><small>t</small></span>
+        <span class="combo" id="combo" hidden><b id="comboN">0</b>콤보</span>
       </div>
       <button class="icon-btn" id="pauseBtn" aria-label="일시정지"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="4" y="3" width="4" height="14" rx="1"/><rect x="12" y="3" width="4" height="14" rx="1"/></svg></button>
     </div>
@@ -61,6 +67,7 @@
   <nav class="dock">
     <span class="pearls"><img id="icPearl" alt="진주"><b id="pearls">0</b></span>
     <button class="dock-btn" id="shopBtn"><img id="icShop" alt="">기지</button>
+    <button class="dock-btn" id="dailyBtn"><img id="icDaily" alt="">도전</button>
     <button class="dock-btn" id="codexBtn"><img id="icCodex" alt="">도감</button>
     <button class="dock-btn" id="soundBtn" aria-pressed="true"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 8h3l4-3v10l-4-3H3z"/><path class="wave" d="M13 7a4 4 0 0 1 0 6M15 5a7 7 0 0 1 0 10"/></svg><span id="soundLabel">소리</span></button>
   </nav>
@@ -115,6 +122,18 @@
   <div class="panel wide">
     <div class="m-head"><h2>수호대 기지</h2><span class="pearls"><img id="icPearl3" alt="진주"><b id="shopPearls">0</b></span><button class="ghost x" id="shopClose">닫기</button></div>
     <div class="shop-grid" id="shopGrid"></div>
+    <h3 class="sub-h">꾸미기</h3>
+    <div class="shop-grid" id="accGrid"></div>
+  </div>
+</section>
+
+<section id="daily" class="screen modal" hidden aria-label="오늘의 도전">
+  <div class="panel">
+    <div class="m-head"><h2>오늘의 도전</h2><span class="count" id="dailyDate"></span><button class="ghost x" id="dailyClose">닫기</button></div>
+    <div class="daily-hero"><img id="dailyChar" alt=""><div><b id="dailyStage"></b><span id="dailyCharName"></span></div></div>
+    <ul class="mods-list" id="dailyMods"></ul>
+    <p class="daily-note" id="dailyNote"></p>
+    <button class="primary" id="dailyGo">도전!</button>
   </div>
 </section>
 

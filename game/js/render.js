@@ -108,6 +108,7 @@
 
   // ── 이펙트 만들기 ───────────────────────────────────────
   function cap() { return opt.lite ? 260 : 750; }
+  let textBudget = 14, sparkBudget = 10;
   function part(p) {
     if (parts.length >= cap()) return;
     if (p.k === 'cube' || p.k === 'drop') { p.cT = A.shade(p.c, 1.12); p.cF = A.shade(p.c, 0.78); }
@@ -142,9 +143,20 @@
     const p = s.p;
     switch (e.k) {
       case 'dmg':
-        if (opt.dmg) text(e.x + (Math.random() - 0.5) * 8, e.y - 6, Math.round(e.v), e.crit ? '#ffd23f' : '#ffffff', e.crit ? 15 : 10.5);
-        if (!opt.lite && Math.random() < 0.5) sparks(e.x, e.y + 6, 'rgba(255,255,255,1)', 1, 50, 0.25);
+        if (opt.dmg && (e.crit || (textBudget > 0 && texts.length < 34))) { textBudget--; text(e.x + (Math.random() - 0.5) * 8, e.y - 6, Math.round(e.v), e.crit ? '#ffd23f' : '#ffffff', e.crit ? 15 : 10.5); }
+        if (!opt.lite && sparkBudget-- > 0) sparks(e.x, e.y + 6, 'rgba(255,255,255,1)', 1, 50, 0.25);
         break;
+      case 'milestone': ring(p.x, p.y, 260, 'rgba(120,255,170,', 0.9, 10); sparks(p.x, p.y, 'rgba(150,255,190,1)', 30, 180, 1.1); flash('210,255,225', 0.35); shake(8); cam.punch = 1; break;
+      case 'birds': flash('255,255,255', 0.15); break;
+      case 'bomb': ring(p.x, p.y, Math.max(W, H) / zoom * 0.7, 'rgba(160,230,255,', 0.7, 14); flash('230,248,255', 0.55); shake(14); break;
+      case 'freeze': ring(p.x, p.y, 300, 'rgba(255,210,160,', 0.8, 8); flash('255,225,190', 0.3); break;
+      case 'pouch': text(p.x, p.y - 30, '+' + e.v, '#fff1c8', 16, 1.0); sparks(p.x, p.y, 'rgba(255,240,200,1)', 10, 90, 0.7); break;
+      case 'feather': ring(p.x, p.y, 120, 'rgba(255,255,255,', 0.5, 6); sparks(p.x, p.y, 'rgba(255,255,255,1)', 14, 120, 0.8); break;
+      case 'combo': ring(p.x, p.y, 150, 'rgba(255,210,90,', 0.6, 6); break;
+      case 'break': cubes(e.x, e.y, ['#9fd3ea', '#d9534f', '#eef3f6', '#f2c037', '#6b665c'], 14, 130, 170); ring(e.x, e.y, 60, 'rgba(120,255,190,', 0.5, 4); break;
+      case 'emerge': cubes(e.x, e.y, ['#2a2a30', '#5b4f6a', '#4a463f'], 6, 70, 110); break;
+      case 'itemdrop': break;
+      case 'cancel': ring(e.x, e.y, 22, 'rgba(140,255,170,', 0.35, 3); sparks(e.x, e.y, 'rgba(160,255,190,1)', 4, 40, 0.5); break;
       case 'kill': {
         const d = D.ENEMIES[e.type];
         const big = e.boss ? 3 : e.elite ? 2 : 1;
@@ -375,6 +387,21 @@
       ctx.lineWidth = 3; ctx.strokeStyle = `rgba(255,230,140,${(0.9 * a + 0.1).toFixed(3)})`;
       ctx.beginPath(); ctx.ellipse(h.x, h.y, h.r, h.r * 0.85, 0, 0, TAU); ctx.stroke();
     }
+    // 오염된 땅에서 솟아나는 몬스터 예고
+    for (const q of s.pend) {
+      const k = 1 - q.t / q.max;
+      const r = 6 + k * 13;
+      ctx.fillStyle = `rgba(28,24,34,${(0.35 + k * 0.45).toFixed(2)})`;
+      ctx.beginPath(); ctx.ellipse(q.x, q.y, r * 1.2, r * 0.55, 0, 0, TAU); ctx.fill();
+      ctx.strokeStyle = `rgba(150,110,190,${(0.3 + k * 0.5).toFixed(2)})`; ctx.lineWidth = 1.5; ctx.stroke();
+      for (let b = 0; b < 3; b++) {
+        const bt = (time * 2.2 + b * 0.33 + q.x * 0.01) % 1;
+        ctx.fillStyle = `rgba(120,100,150,${(0.8 * (1 - bt)).toFixed(2)})`;
+        ctx.beginPath(); ctx.arc(q.x + (b - 1) * r * 0.5, q.y - bt * 10, 1.5 + bt * 1.5, 0, TAU); ctx.fill();
+      }
+    }
+    drawCritters(s);
+    worldT();
     // 갯지렁이 함정
     for (const mi of s.mines) {
       const armed = mi.arm <= 0;
@@ -422,6 +449,46 @@
     }
   }
 
+  // ── 되살아난 갯벌에 돌아오는 생물 (그림만) ─────────────────
+  const critters = [];
+  let critT = 0, critMap = null;
+  function drawCritters(s) {
+    if (critMap !== s.map) { critters.length = 0; critMap = s.map; }
+    const m = s.map, dt = 1 / 60;
+    critT -= dt;
+    if (critT <= 0 && critters.length < (opt.lite ? 5 : 11)) {
+      critT = 0.35;
+      const hw = W / 2 / zoom, hh = H / 2 / zoom;
+      for (let k = 0; k < 6; k++) {
+        const x = cam.x + (Math.random() * 2 - 1) * hw * 0.95, y = cam.y + (Math.random() * 2 - 1) * hh * 0.9;
+        const tx = Math.floor(x / T), ty = Math.floor(y / T);
+        if (tx < 0 || ty < 0 || tx >= MW || ty >= MH) continue;
+        const t = m.tiles[ty * MW + tx];
+        if (t !== TL.MARSH && t !== TL.POOL) continue;
+        if (U.d2(x, y, s.p.x, s.p.y) < 60 * 60) continue;
+        const kind = t === TL.POOL ? (Math.random() < 0.5 ? 'mudskipper' : 'spoonbill') : (Math.random() < 0.7 ? 'crab' : 'spoonbill');
+        critters.push({ x, y, kind, t: 0, life: 3 + Math.random() * 3, dir: Math.random() < 0.5 ? -1 : 1 });
+        break;
+      }
+    }
+    let j = 0;
+    for (const c of critters) {
+      c.t += dt;
+      if (c.t >= c.life) continue;
+      critters[j++] = c;
+      const tx = Math.floor(c.x / T), ty = Math.floor(c.y / T);
+      const tile = (tx >= 0 && ty >= 0 && tx < MW && ty < MH) ? m.tiles[ty * MW + tx] : TL.SEA;
+      if (tile !== TL.MARSH && tile !== TL.POOL && tile !== TL.MUD) { c.life = Math.min(c.life, c.t + 0.3); }
+      const inn = Math.min(1, c.t / 0.35, (c.life - c.t) / 0.35);
+      let z = 0, scl = 0.42;
+      if (c.kind === 'crab') { c.x += c.dir * 14 * dt * (Math.sin(c.t * 3) > -0.3 ? 1 : 0); scl = 0.38 * inn; }
+      else if (c.kind === 'spoonbill') { z = (1 - inn) * 40; scl = 0.5; if (inn >= 1) c.x += c.dir * 6 * dt; }
+      else { z = Math.abs(Math.sin(c.t * 3)) * 10; c.x += c.dir * 20 * dt; scl = 0.45; }
+      drawSpr(A.spr(c.kind, Math.floor(c.t * 6) % 2), c.x, c.y, z, { sx: scl * (c.kind === 'crab' ? 1 : c.dir), sy: scl, alpha: Math.min(1, inn * 1.2) * 0.95 });
+    }
+    critters.length = j;
+  }
+
   // ── 생물·물체 ───────────────────────────────────────────
   function wrap(i, k, y, ref, extra) {
     let o = pool[i];
@@ -430,8 +497,10 @@
     return o;
   }
   const FLOAT = { bag: 1, jelly: 1, smog: 1 };
+  const drawList = [];
   function drawEntities(s) {
-    const p = s.p, list = [];
+    const p = s.p, list = drawList;
+    list.length = 0;
     const hw = W / 2 / zoom + 90, hh = H / 2 / zoom + 120;
     const vis = (x, y) => Math.abs(x - cam.x) < hw && Math.abs(y - cam.y) < hh;
     let n = 0;
@@ -453,13 +522,30 @@
       ctx.moveTo(x + r, y); ctx.ellipse(x, y, r, r * 0.38, 0, 0, TAU);
     }
     ctx.fill();
-    // 보석 (땅에 붙어 있어요)
+    // 탄소 결정: 빛 → 바닥 점 → 돌아가는 결정
+    worldT();
+    ctx.globalCompositeOperation = 'lighter';
+    const GL = [A.glow('rgba(70,175,255,1)'), A.glow('rgba(60,240,205,1)'), A.glow('rgba(255,200,70,1)')], GR = [10, 13, 17];
     for (const g of s.gems) {
       if (!vis(g.x, g.y)) continue;
-      const sp = A.spr(g.tier === 2 ? 'gem3' : g.tier === 1 ? 'gem2' : 'gem1');
-      const z = 3 + Math.sin(time * 5 + g.x * 0.1) * 1.5;
-      if (!opt.lite && g.tier) { worldT(); drawGlow(g.tier === 2 ? 'rgba(255,200,60,0.9)' : 'rgba(60,240,200,0.8)', g.x, g.y - z - 4, 10); }
-      drawSpr(sp, g.x, g.y, z);
+      const r = GR[g.tier] * (1 + 0.15 * Math.sin(time * 6 + g.x));
+      ctx.globalAlpha = opt.lite ? 0.45 : 0.75;
+      ctx.drawImage(GL[g.tier], g.x - r, g.y - 8 - r, r * 2, r * 2);
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+    const GS2 = [A.spr('gem1'), A.spr('gem2'), A.spr('gem3')];
+    for (const g of s.gems) {
+      if (!vis(g.x, g.y)) continue;
+      const z = 4 + Math.sin(time * 5 + g.x * 0.1) * 2;
+      let spin = Math.cos(time * 4 + g.x * 0.07 + g.y * 0.05);
+      if (Math.abs(spin) < 0.3) spin = spin < 0 ? -0.3 : 0.3;
+      drawSpr(GS2[g.tier], g.x, g.y, z, { sx: spin });
+      if (!opt.lite && ((time * 1.3 + (g.x * 0.013 + g.y * 0.007)) % 1) < 0.06) {
+        worldT();
+        ctx.fillStyle = 'rgba(255,255,255,0.95)';
+        ctx.fillRect(g.x - 0.6, g.y - z - 16, 1.2, 6); ctx.fillRect(g.x - 3, g.y - z - 13.6, 6, 1.2);
+      }
     }
     for (const o of list) {
       if (o.k === 'e') drawEnemy(s, o.ref);
@@ -472,11 +558,23 @@
         const q = o.ref, big = o.ex.evo ? 0.85 : 0.62;
         drawSpr(A.spr('crab', Math.floor(time * 8 + q.a * 3) % 2), q.x, q.y, 3, { sx: big, sy: big, rot: Math.sin(time * 10 + q.a) * 0.15 });
       } else if (o.k === 'i') {
-        const it = o.ref, z = 4 + Math.sin(time * 4 + it.x) * 3;
+        const it = o.ref, info = D.ITEMS[it.k] || D.ITEMS.heal;
+        const age = it.t, drop = age < 0.45 ? 1 - age / 0.45 : 0;
+        const z = 7 + Math.sin(time * 4 + it.x) * 3 + drop * drop * 60;
+        const pop = age < 0.45 ? 0.6 + 0.4 * U.outBack(age / 0.45) : 1;
+        const pulse = 0.5 + 0.5 * Math.sin(time * 5 + it.x);
         worldT();
-        if (it.k === 'chest') drawGlow('rgba(255,210,90,0.9)', it.x, it.y - 10, 30 + Math.sin(time * 6) * 4, 0.9);
-        else drawGlow(it.k === 'heal' ? 'rgba(255,90,120,0.8)' : 'rgba(120,180,255,0.8)', it.x, it.y - 8, 18);
-        drawSpr(A.spr(it.k === 'chest' ? 'chest' : it.k === 'heal' ? 'heart' : 'magnet'), it.x, it.y, z);
+        ctx.strokeStyle = `rgba(${info.col},${(0.45 + 0.35 * pulse).toFixed(2)})`; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.ellipse(it.x, it.y + 2, 13 + pulse * 5, 5 + pulse * 2, 0, 0, TAU); ctx.stroke();
+        ctx.globalCompositeOperation = 'lighter';
+        const bm = A.beam(info.col), bh = it.k === 'chest' ? 110 : 80;
+        ctx.globalAlpha = 0.65 + 0.25 * pulse;
+        ctx.drawImage(bm, it.x - 11, it.y - bh, 22, bh);
+        ctx.globalAlpha = 1;
+        drawGlow(`rgba(${info.col},1)`, it.x, it.y - z - 6, (it.k === 'chest' ? 30 : 22) + pulse * 5, 0.85);
+        ctx.globalCompositeOperation = 'source-over';
+        const spin = it.k === 'chest' ? 1 : Math.cos(time * 3 + it.x);
+        drawSpr(A.spr(info.model), it.x, it.y, z, { sx: 1.35 * pop * (Math.abs(spin) < 0.35 ? (spin < 0 ? -0.35 : 0.35) : spin), sy: 1.35 * pop });
       } else if (o.k === 's') {
         const sh = o.ref;
         if (sh.k === 'lob') drawSpr(A.spr('mudskipper', 1), sh.x, sh.y, sh.z, { sx: 0.8, sy: 0.8, flip: sh.tx < sh.x0, rot: (sh.tx < sh.x0 ? 1 : -1) * (0.9 - sh.tt / sh.flight * 1.8) });
@@ -498,8 +596,20 @@
     else if (meta && meta.frames > 1) f = Math.floor(time * (d.roll ? (e.st.ph === 'dash' ? 24 : 10) : d.spin ? 6 : 4) + e.id) % meta.frames;
     const sp = A.spr(model, f);
     const sc = e.r / d.r;
-    let z = FLOAT[model] ? 4 + Math.sin(time * 3 + e.ph) * 2.5 : Math.abs(Math.sin(time * 7 + e.ph)) * (e.boss ? 0 : 1.6);
-    let sy = 1 + Math.sin(time * 9 + e.ph) * 0.05, sxx = 2 - sy;
+    const frozen = s.freezeT > 0 && !e.boss && !d.prop;
+    let z = d.prop || frozen ? 0 : FLOAT[model] ? 4 + Math.sin(time * 3 + e.ph) * 2.5 : Math.abs(Math.sin(time * 7 + e.ph)) * (e.boss ? 0 : 1.6);
+    let sy = d.prop || frozen ? 1 : 1 + Math.sin(time * 9 + e.ph) * 0.05, sxx = 2 - sy;
+    if (frozen) {
+      worldT();
+      ctx.fillStyle = 'rgba(110,80,50,0.75)';
+      ctx.beginPath(); ctx.ellipse(e.x, e.y + 1, e.r * 1.2, e.r * 0.5, 0, 0, TAU); ctx.fill();
+    }
+    if (d.prop && ((time * 0.7 + e.id * 0.37) % 1) < 0.12) {
+      worldT();
+      const gx = e.x + Math.sin(e.id) * 6, gy = e.y - 26, k = 1 - Math.abs(((time * 0.7 + e.id * 0.37) % 1) / 0.06 - 1);
+      ctx.fillStyle = `rgba(255,255,255,${(0.9 * Math.max(0, k)).toFixed(2)})`;
+      ctx.fillRect(gx - 0.8, gy - 5, 1.6, 10); ctx.fillRect(gx - 5, gy - 0.8, 10, 1.6);
+    }
     let x = e.x, rot = 0;
     if (e.beh === 'charge') {
       if (e.st.ph === 'aim') { x += Math.sin(time * 60) * 1.5; sy = 0.9; sxx = 1.1; }
@@ -531,9 +641,22 @@
     if (!curNoUi) ctx.strokeStyle = 'rgba(80,240,220,0.85)'; ctx.lineWidth = 2;
     if (!curNoUi) { ctx.beginPath(); ctx.ellipse(p.x, p.y + 2, 15, 6, 0, 0, TAU); ctx.stroke(); }
     if (!curNoUi && p.onMarsh && p.hp < p.maxHp) { ctx.strokeStyle = `rgba(120,255,160,${0.4 + 0.3 * Math.sin(time * 8)})`; ctx.beginPath(); ctx.ellipse(p.x, p.y + 2, 19, 8, 0, 0, TAU); ctx.stroke(); }
-    const id = s.ch.id;
+    const id = s.skin ? A.withAcc(s.ch.id, s.skin) : s.ch.id;
     const moving = p.moving;
     const sp = A.spr(id, moving ? Math.floor(time * 9) % 2 : 0);
+    if (!curNoUi && p.onMarsh) {
+      ctx.globalCompositeOperation = 'lighter';
+      drawGlow('rgba(110,255,150,1)', p.x, p.y - 4, 30 + Math.sin(time * 5) * 4, 0.35);
+      ctx.globalCompositeOperation = 'source-over';
+      if (Math.random() < 0.12) part({ k: 'leaf', x: p.x + (Math.random() - 0.5) * 26, y: p.y, z: 2, vx: 0, vy: 0, vz: 34, s: 2.4, c: '#8dff9f', t: 0, life: 0.8 });
+    }
+    if (p.sprintT > 0) {
+      worldT();
+      ctx.globalCompositeOperation = 'lighter';
+      drawGlow('rgba(255,255,255,1)', p.x, p.y - 8, 26, 0.6);
+      ctx.globalCompositeOperation = 'source-over';
+      if (Math.random() < 0.6) part({ k: 'spark', x: p.x - p.dx * 10, y: p.y - p.dy * 10, z: 6, vx: 0, vy: 0, vz: 10, s: 6, c: `rgba(${['255,150,200', '150,220,255', '255,240,150'][Math.floor(Math.random() * 3)]},1)`, t: 0, life: 0.5 });
+    }
     const hop = moving ? Math.abs(Math.sin(time * 13)) * 2.6 : Math.sin(time * 3) * 0.6;
     const blink = p.inv > 0 && s.t - p.hurtT < 0.6 && Math.floor(time * 20) % 2 === 0;
     const flip = id !== 'crab' && p.face < 0;
@@ -738,7 +861,10 @@
   function drawIndicators(s) {
     const marks = [];
     if (s.boss) marks.push({ x: s.boss.x, y: s.boss.y, c: '#ff5a5a' });
-    for (const it of s.items) if (it.k === 'chest') marks.push({ x: it.x, y: it.y, c: '#ffd23f' });
+    for (const it of s.items) {
+      if (it.k === 'chest') marks.push({ x: it.x, y: it.y, c: '#ffd23f' });
+      else if (U.d2(it.x, it.y, s.p.x, s.p.y) < 1100 * 1100) { const c = D.ITEMS[it.k]; marks.push({ x: it.x, y: it.y, c: c ? `rgb(${c.col})` : '#ffffff' }); }
+    }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     for (const m of marks) {
       const X = sx(m.x), Y = sy(m.y);
@@ -816,6 +942,7 @@
     time += dt;
     o = o || {};
     frameOpt = o;
+    textBudget = 14; sparkBudget = 10;
     if (A.TILES.theme !== s.stage.key || A.TILES.bs !== BS) A.setTheme(s.stage.key, BS);
     const p = s.p;
     const follow = 1 - Math.exp(-dt * 8);

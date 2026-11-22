@@ -97,7 +97,7 @@
     if (f) v.box(13, 7, 1, 13, 7, 2, SHELL);
     return v;
   });
-  def('seal', 1.7, 2, f => {
+  def('seal', 1.7, 2, (f, noBall) => {
     const v = new V(19, 9, 14);
     const BODY = '#d4dbe0', SPOT = '#6f7d87', HEAD = '#e2e8eb', FL = '#a7b2b9';
     v.ell(8.5, 4.5, 3, 7.6, 3.8, 3, (x, y, z) => z <= 1 ? '#eef2f4' : (H(x, y, z, 71) < 0.13 && z >= 3 ? SPOT : BODY));
@@ -113,7 +113,7 @@
     v.face(13, 4, '#f6f8f9').face(14, 4, '#f6f8f9').face(15, 4, '#f6f8f9');
     v.face(14, 3, '#5b4a4a');
     const segs = ['#ff5a5a', '#ffffff', '#3a8fd1', '#ffd23f'];
-    for (let x = 12; x <= 15; x++) for (let y = 3; y <= 6; y++) for (let z = 9; z <= 12; z++) {
+    if (!noBall) for (let x = 12; x <= 15; x++) for (let y = 3; y <= 6; y++) for (let z = 9; z <= 12; z++) {
       const ex = x === 12 || x === 15, ey = y === 3 || y === 6, ez = z === 9 || z === 12;
       if ((ex && ey) || (ex && ez) || (ey && ez)) continue;
       v.set(x, y, z, z === 12 ? '#ffffff' : segs[(x + (f ? 1 : 0)) % 4]);
@@ -459,9 +459,9 @@
       if (Math.abs(x - 2) + Math.abs(y - 2) + Math.abs(z - 3) * 0.75 <= 2.3) v.set(x, y, z, z >= 4 ? hi : col);
     return v;
   };
-  def('gem1', 1.25, 1, gem('#2f95ff', '#9fd8ff'));
-  def('gem2', 1.55, 1, gem('#18d1b0', '#9ff5e2'));
-  def('gem3', 1.95, 1, gem('#ffb21f', '#ffe9a0'));
+  def('gem1', 1.65, 1, gem('#2fa8ff', '#c8f0ff'));
+  def('gem2', 1.95, 1, gem('#14d6b2', '#b4fbe9'));
+  def('gem3', 2.35, 1, gem('#ffb21f', '#fff0b0'));
   def('heart', 1.7, 1, () => {
     const v = new V(8, 4, 8);
     for (let z = 0; z < 8; z++) for (let x = 0; x < 8; x++) {
@@ -499,6 +499,40 @@
     v.ell(4, 4, 0.5, 4, 4, 2.2, (x, y, z) => z >= 1 ? '#7a5c3c' : '#5f4630');
     v.box(3, 3, 1, 4, 4, 2, null).set(3, 3, 1, '#2b1d12').set(4, 4, 1, '#2b1d12').set(3, 4, 1, '#2b1d12').set(4, 3, 1, '#2b1d12');
     v.set(4, 3, 2, '#de7d72');
+    return v;
+  });
+
+  def('trash', 2.0, 1, () => {
+    const v = new V(14, 11, 9);
+    v.ell(7, 5.5, 1.2, 6.6, 5, 2.6, (x, y, z) => H(x, y, z, 91) < 0.3 ? '#77716a' : '#5f5a52');
+    v.box(2, 3, 3, 5, 4, 4, '#9fd3ea').set(6, 3, 4, '#2f80ed').set(6, 4, 4, '#2f80ed');
+    v.ell(9.5, 4, 4.6, 2.3, 2, 2.1, '#eef3f6');
+    v.box(3, 7, 3, 4, 8, 5, '#d9534f').box(3, 7, 6, 4, 8, 6, '#c9c9c9');
+    v.box(8, 7, 3, 11, 8, 3, '#3f7f5a').set(10, 8, 4, '#f08a24');
+    v.box(6, 5, 4, 7, 6, 5, '#f2c037');
+    return v;
+  });
+  def('shell', 1.8, 1, () => {
+    const v = new V(11, 7, 8);
+    v.ell(4.2, 3.5, 3.2, 3.6, 3, 2.9, (x, y, z) => (x + z) % 3 === 0 ? '#e7ae80' : '#f7d6b2');
+    v.ell(7.4, 3.5, 4.2, 2.3, 2.1, 2.2, (x, y, z) => (x + z) % 3 === 0 ? '#e09c6c' : '#f1c59c');
+    v.ell(9.4, 3.5, 5.2, 1.3, 1.3, 1.3, '#d9905e');
+    v.box(1, 4, 2, 2, 5, 3, '#ff9fb0');
+    return v;
+  });
+  def('feather', 1.7, 1, () => {
+    const v = new V(5, 4, 13);
+    for (let z = 0; z < 13; z++) {
+      const w = z < 2 ? 0 : Math.round(Math.sin((z - 1) / 11 * Math.PI) * 2);
+      for (let x = 2 - w; x <= 2 + w; x++) v.box(x, 1, z, x, 2, z, z > 9 ? '#1d1d1d' : x === 2 ? '#d6d6ce' : '#ffffff');
+    }
+    return v;
+  });
+  def('pouch', 1.8, 1, () => {
+    const v = new V(8, 7, 10);
+    v.ell(4, 3.5, 3.2, 3.7, 3.1, 3.2, (x, y, z) => z >= 5 ? '#d29560' : '#b9784a');
+    v.box(3, 3, 6, 5, 4, 6, '#7a4a2a');
+    v.set(3, 3, 7, '#f6f1e7').set(4, 4, 7, '#ffffff').set(5, 3, 7, '#f6f1e7').set(4, 3, 8, '#ffffff').set(4, 4, 8, '#ffe6ee');
     return v;
   });
 
@@ -622,24 +656,73 @@
     return { c: out, f: fl, ax: pad + v.w * vs / 2, ay: pad + v.d * ts / 2 + v.h * fs, w: W, h: Hh };
   }
 
+  // 꾸미기: 캐릭터마다 머리 위·얼굴 앞 자리
+  const ANCHOR = {
+    crab: { top: [7.5, 7, 11], face: [3, 12, 8, 9] },
+    seal: { top: [13.5, 4.5, 9], face: [11, 17, 6, 9], hatOff: true },
+    spoonbill: { top: [13.5, 3.5, 14], face: [12, 15, 12, 6] },
+    mudskipper: { top: [13, 3, 7], face: [12, 15, 5, 6] },
+    porpoise: { top: [14.5, 3.5, 7], face: [13, 17, 4, 7] },
+  };
+  function withAcc(base, acc) {
+    if (!acc) return base;
+    const name = base + '@' + acc;
+    if (M[name]) return name;
+    const m = M[base], an = ANCHOR[base];
+    if (!m || !an) return base;
+    def(name, m.u, m.frames, f => {
+      const b = m.fn(f, an.hatOff && acc !== 'shades');
+      const v = new V(b.w, b.d + 1, b.h + 4);
+      for (let z = 0; z < b.h; z++) for (let y = 0; y < b.d; y++) for (let x = 0; x < b.w; x++) { const c = b.get(x, y, z); if (c) v.set(x, y, z, c); }
+      const [tx, ty, tz] = an.top;
+      if (acc === 'straw') {
+        for (let dy = -2; dy <= 2; dy++) for (let dx = -3; dx <= 3; dx++) if (dx * dx / 10 + dy * dy / 5 <= 1.05) v.set(tx + dx - 0.5, ty + dy - 0.5, tz, '#e8c66a');
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { v.set(tx + dx - 0.5, ty + dy - 0.5, tz + 1, dy === 1 || dx !== 0 ? '#d9534f' : '#e8c66a'); v.set(tx + dx - 0.5, ty + dy - 0.5, tz + 2, '#f0d27a'); }
+      } else if (acc === 'crown') {
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -2; dx <= 2; dx++) if (Math.abs(dx) === 2 || Math.abs(dy) === 1) v.set(tx + dx - 0.5, ty + dy - 0.5, tz, '#ffcf33');
+        for (const [dx, dy] of [[-2, -1], [2, -1], [-2, 1], [2, 1], [0, 1], [0, -1]]) v.set(tx + dx - 0.5, ty + dy - 0.5, tz + 1, '#ffe27a');
+        v.set(tx - 0.5, ty + 0.5, tz, '#e8453c');
+      } else if (acc === 'shades') {
+        const [x0, x1, z, y] = an.face;
+        for (let x = x0; x <= x1; x++) { v.set(x, y, z, '#121418'); v.set(x, y, z + 1, x === x0 || x === x1 ? '#121418' : '#2b3a5a'); }
+      }
+      return v;
+    }, m.ol);
+    return name;
+  }
+
   let BS = 2;
   const SPR = {};
+  function bakeOne(name) {
+    const m = M[name];
+    if (!m) return null;
+    const vs = Math.max(1, Math.round(m.u * BS));
+    const arr = [];
+    for (let f = 0; f < m.frames; f++) arr.push(bakeVox(m.fn(f), vs, m.ol));
+    SPR[name] = arr;
+    return arr;
+  }
   function bakeAll(bs) {
     BS = bs;
-    for (const name in M) {
-      const m = M[name];
-      const vs = Math.max(1, Math.round(m.u * bs));
-      const k = vs / bs; // 실제 월드 px/복셀
-      SPR[name] = [];
-      for (let f = 0; f < m.frames; f++) {
-        const sp = bakeVox(m.fn(f), vs, m.ol);
-        sp.k = k / m.u;
-        SPR[name].push(sp);
-      }
-    }
+    for (const k in SPR) delete SPR[k];
     TILES.theme = null;
   }
-  function spr(name, f) { const a = SPR[name]; return a ? a[(f || 0) % a.length] : null; }
+  function prewarm(names) { for (const n of names) if (!SPR[n] && M[n]) bakeOne(n); }
+  function spr(name, f) { const a = SPR[name] || bakeOne(name); return a ? a[(f || 0) % a.length] : null; }
+  const BEAM = {};
+  function beam(col) {
+    if (BEAM[col]) return BEAM[col];
+    const c = mk(32, 128), g = c.getContext('2d');
+    const gr = g.createLinearGradient(0, 128, 0, 0);
+    gr.addColorStop(0, `rgba(${col},0.6)`); gr.addColorStop(0.6, `rgba(${col},0.18)`); gr.addColorStop(1, `rgba(${col},0)`);
+    g.fillStyle = gr; g.fillRect(0, 0, 32, 128);
+    g.globalCompositeOperation = 'destination-in';
+    const h = g.createLinearGradient(0, 0, 32, 0);
+    h.addColorStop(0, 'rgba(0,0,0,0)'); h.addColorStop(0.5, 'rgba(0,0,0,1)'); h.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = h; g.fillRect(0, 0, 32, 128);
+    BEAM[col] = c;
+    return c;
+  }
 
   // ── 아이콘 (DOM용 이미지) ────────────────────────────────
   const ICON = {};
@@ -826,5 +909,5 @@
     return c;
   }
 
-  GS.art = { bakeAll, spr, icon, silhouette, setTheme, tile, glow, shade, mix, THEMES, TILES, get BS() { return BS; }, MODELS: M };
+  GS.art = { bakeAll, spr, prewarm, withAcc, beam, icon, silhouette, setTheme, tile, glow, shade, mix, THEMES, TILES, get BS() { return BS; }, MODELS: M };
 })(typeof window !== 'undefined' ? window : globalThis);

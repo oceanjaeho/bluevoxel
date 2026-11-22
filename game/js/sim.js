@@ -154,18 +154,19 @@
     const p = s.p, m = s.meta, ch = s.ch, P = s.passives;
     const L = id => P[id] || 0;
     const oldMax = p.maxHp || 0;
-    p.maxHp = ch.hp * (1 + 0.08 * (m.hp || 0)) * (1 + 0.15 * L('mud'));
+    const md = s.mod || {};
+    p.maxHp = ch.hp * (1 + 0.08 * (m.hp || 0)) * (1 + 0.15 * L('mud')) * (md.glass ? 0.7 : 1);
     if (oldMax && p.maxHp > oldMax) p.hp += p.maxHp - oldMax;
     p.hp = Math.min(p.hp, p.maxHp);
     p.speed = C.PLAYER.speed * (ch.speed || 1) * (1 + 0.05 * (m.speed || 0)) * (1 + 0.08 * L('current'));
-    p.magnet = C.PLAYER.magnet * (ch.magnet || 1) * (1 + 0.2 * (m.magnet || 0)) * (1 + 0.25 * L('plankton'));
+    p.magnet = C.PLAYER.magnet * (ch.magnet || 1) * (1 + 0.2 * (m.magnet || 0)) * (1 + 0.25 * L('plankton')) * (md.magnet ? 2 : 1);
     p.regen = 0.2 * (m.regen || 0) + 0.3 * L('reed');
     p.armor = (ch.armor || 0) + L('oyster');
-    p.might = (1 + 0.06 * (m.might || 0)) * (1 + 0.1 * L('nutrient'));
+    p.might = (1 + 0.06 * (m.might || 0)) * (1 + 0.1 * L('nutrient')) * (md.glass ? 1.4 : 1);
     p.cdMul = Math.max(0.5, 1 - 0.07 * L('sun'));
     p.area = (ch.area || 1) * (1 + 0.08 * L('flow'));
     p.projSpd = 1 + 0.08 * L('flow');
-    p.xpMul = (1 + 0.06 * (m.growth || 0)) * (1 + 0.05 * L('plankton'));
+    p.xpMul = (1 + 0.06 * (m.growth || 0)) * (1 + 0.05 * L('plankton')) * (md.growth ? 1.3 : 1);
     p.crit = C.CRIT + 0.05 * L('moon');
     p.dur = 1 + 0.15 * L('kelp');
     p.amount = (L('coral') >= 3 ? 1 : 0) + (L('coral') >= 5 ? 1 : 0);
@@ -191,10 +192,12 @@
     const s = {
       star, endless: !!o.endless, nextBossAt: stage.bossAt, bossT0: 0, bossKills: 0, evIdx2: 0, evNext: 0,
       evoCount: 0, stormSurvived: 0, greenMax: 0, hrings: [],
+      pend: [], mIdx: 0, green: 0, combo: 0, comboT: 0, comboMax: 0, comboStep: 0, freezeT: 0,
+      propT: C.PROP_EVERY, propCount: 0, propsBroken: 0, mods: (o.mods || []).slice(), mod: {}, daily: !!o.daily,
       seed, r, stage, ch, meta, t: 0, mode: 'play', fx: [], nextId: 1, map,
       view: { hw: 440, hh: 260 },
       p: { x: WW / 2, y: WH / 2, r: C.PLAYER.r, hp: 1, maxHp: 0, inv: 1, face: 1, dx: 1, dy: 0, mx: 0, my: 0, moving: false,
-           slowT: 0, level: 1, xp: 0, xpNext: xpFor(1), revive: meta.revive ? 1 : 0, rerolls: meta.reroll || 0,
+           slowT: 0, sprintT: 0, level: 1, xp: 0, xpNext: xpFor(1), revive: meta.revive ? 1 : 0, rerolls: meta.reroll || 0,
            trail: [], healT: 0, hurtT: -9, onMarsh: false },
       weapons: [], passives: {}, followers: [],
       enemies: [], shots: [], eshots: [], mines: [], novas: [], zones: [], gems: [], items: [],
@@ -203,9 +206,11 @@
       evIdx: 0, spawnT: 0.5, growT: 0, storm: null, boss: null, victory: null, endT: 0, alert: null,
       stats: {}, killedBy: null, seen: {}, enraged: false,
     };
+    for (const id of s.mods) s.mod[id] = true;
     addWeapon(s, ch.weapon);
     recalc(s);
     s.p.hp = s.p.maxHp;
+    placeProps(s, C.PROPS * (s.mod.loot ? 2 : 1), 260);
     return s;
   }
 
@@ -309,13 +314,16 @@
     const def = D.ENEMIES[type];
     const sk = s.star - 1;
     let hp = def.boss ? def.hp * (1 + (s.stage.id - 1) * 0.15) * (1 + s.bossKills * 0.6) : def.hp * s.stage.hpMul * (1 + s.t / 80 + Math.pow(s.t / 240, 2));
-    hp *= 1 + D.STARS.hp * sk;
+    hp *= (1 + D.STARS.hp * sk) * (s.mod.tough ? 1.35 : 1);
+    if (def.prop) hp = def.hp * (1 + s.t / 100);
     const e = {
       id: s.nextId++, type, def, x, y, r: def.r, hp, maxHp: hp, spd: def.spd * U.rnd(s.r, 0.92, 1.08),
       dmg: def.dmg * s.stage.dmgMul * (1 + D.STARS.dmg * sk), mass: def.mass, elite: false, boss: !!def.boss, beh: def.beh,
       flash: 0, slowT: 0, slowF: 0, kx: 0, ky: 0, hits: {}, st: {}, dead: false, face: 1,
       ph: s.r() * TAU, pt: 0.45, v: Math.floor(s.r() * 3), born: s.t,
     };
+    if (s.mod.fast) e.spd *= 1.2;
+    if (def.prop) { e.spd = 0; s.propCount++; }
     if (o.elite) { e.elite = true; e.r *= 2; e.hp = e.maxHp = hp * 14; e.dmg *= 1.6; e.mass *= 4; e.spd *= 0.92; }
     if (o.sweep) { e.beh = 'sweep'; e.st.vx = o.vx; e.st.vy = o.vy; e.st.life = o.life; }
     s.enemies.push(e);
@@ -332,7 +340,7 @@
   }
   function densFor(s) {
     const d = densAt(s.stage, s.t);
-    const k = (1 + D.STARS.dens * (s.star - 1)) * (s.endless && s.t > 330 ? 1 + (s.t - 330) / 300 : 1);
+    const k = (1 + D.STARS.dens * (s.star - 1)) * (s.endless && s.t > 330 ? 1 + (s.t - 330) / 300 : 1) * (s.mod.horde ? 1.3 : 1);
     d.min *= k; d.iv /= Math.sqrt(k);
     return d;
   }
@@ -342,9 +350,31 @@
     return m;
   }
 
+  function placeProps(s, n, minD) {
+    for (let i = 0; i < n; i++) {
+      for (let k = 0; k < 40; k++) {
+        const tx = Math.floor(s.r() * MW), ty = Math.floor(s.r() * MH);
+        if (s.map.tiles[ty * MW + tx] !== TL.DIRTY) continue;
+        const x = tx * T + T / 2, y = ty * T + T / 2;
+        if (U.d2(x, y, s.p.x, s.p.y) < minD * minD) continue;
+        spawnEnemy(s, 'trash', x, y);
+        break;
+      }
+    }
+  }
+
   function spawnMixed(s) {
     const mix = mixAt(s.stage, s.t);
     const type = U.weighted(s.r, Object.keys(mix), k => mix[k]);
+    if (s.r() < C.EMERGE && !s.victory) {
+      const hw = s.view.hw * 0.92, hh = s.view.hh * 0.88, p = s.p;
+      for (let k = 0; k < 10; k++) {
+        const x = p.x + U.rnd(s.r, -hw, hw), y = p.y + U.rnd(s.r, -hh, hh);
+        if (U.d2(x, y, p.x, p.y) < 200 * 200 || tileAt(s, x, y) !== TL.DIRTY) continue;
+        s.pend.push({ x, y, type, t: 0.9, max: 0.9, n: type === 'micro' ? 4 : 1, dead: false });
+        return;
+      }
+    }
     const q = offscreen(s, 50);
     if (type === 'micro') {
       for (let i = 0; i < 4; i++) spawnEnemy(s, type, q.x + U.rnd(s.r, -22, 22), q.y + U.rnd(s.r, -22, 22));
@@ -354,13 +384,24 @@
   function spawnTick(s, dt) {
     if (s.victory) return;
     const d = densFor(s);
-    const alive = s.enemies.length;
+    const alive = s.enemies.length - s.propCount;
     if (alive >= C.ENEMY_CAP) return;
     s.spawnT -= dt;
     let n = 0;
     if (s.spawnT <= 0) { s.spawnT += d.iv; n += d.batch; }
     if (alive < d.min) n = Math.max(n, Math.min(3, Math.ceil(d.min - alive)));
     for (let i = 0; i < n; i++) spawnMixed(s);
+  }
+
+  function updatePend(s, dt) {
+    for (const q of s.pend) {
+      q.t -= dt;
+      if (q.t > 0) continue;
+      q.dead = true;
+      if (tileAt(s, q.x, q.y) !== TL.DIRTY) { s.fx.push({ k: 'cancel', x: q.x, y: q.y }); continue; }
+      for (let i = 0; i < q.n; i++) spawnEnemy(s, q.type, q.x + (q.n > 1 ? U.rnd(s.r, -16, 16) : 0), q.y + (q.n > 1 ? U.rnd(s.r, -10, 10) : 0));
+      s.fx.push({ k: 'emerge', x: q.x, y: q.y });
+    }
   }
 
   function fireEvent(s, ev) {
@@ -448,14 +489,27 @@
     if (e.dead) return;
     e.dead = true;
     if (e.silent) return;
-    s.kills++;
     const def = e.def;
+    if (def.prop) {
+      s.propCount--; s.propsBroken++;
+      dropItem(s, U.weighted(s.r, Object.keys(D.DROP_PROP), k => D.DROP_PROP[k]), e.x, e.y);
+      restoreAt(s, e.x, e.y, 58);
+      s.fx.push({ k: 'break', x: e.x, y: e.y });
+      return;
+    }
+    s.kills++;
+    s.combo++; s.comboT = 2.2;
+    if (s.combo > s.comboMax) s.comboMax = s.combo;
+    if (s.comboStep < D.COMBO_STEPS.length && s.combo >= D.COMBO_STEPS[s.comboStep]) {
+      const v = D.COMBO_STEPS[s.comboStep++];
+      s.bonusPearls += Math.round(v / 20);
+      s.fx.push({ k: 'combo', n: v });
+    }
     if (!e.boss) dropGem(s, e.x, e.y, e.elite ? 30 : def.xp);
-    if (e.elite) s.items.push({ k: 'chest', x: e.x, y: e.y, t: 0, dead: false });
+    if (e.elite) dropItem(s, 'chest', e.x, e.y);
     else if (!e.boss) {
-      const q = s.r();
-      if (q < 0.011) s.items.push({ k: 'heal', x: e.x, y: e.y, t: 0, dead: false });
-      else if (q < 0.0145) s.items.push({ k: 'magnet', x: e.x, y: e.y, t: 0, dead: false });
+      let q = s.r();
+      for (const k in D.DROP_KILL) { q -= D.DROP_KILL[k]; if (q < 0) { dropItem(s, k, e.x, e.y); break; } }
     }
     const n = restoreAt(s, e.x, e.y, C.RESTORE_R + e.r * (e.elite ? 2.2 : 1));
     if (def.split && s.enemies.length < C.ENEMY_CAP) {
@@ -478,6 +532,44 @@
         s.fx.push({ k: 'bosskill', x: e.x, y: e.y, type: e.type, endless: true });
       } else startVictory(s, e);
     }
+  }
+
+  function dropItem(s, k, x, y) {
+    s.items.push({ k, x, y, t: 0, dead: false });
+    s.fx.push({ k: 'itemdrop', item: k, x, y });
+  }
+
+  // 화면 속 몬스터를 한 번에 쓸어가요 (큰 물결·대조기)
+  function screenClear(s, bossFrac) {
+    const p = s.p, hw = s.view.hw + 40, hh = s.view.hh + 40;
+    for (const e of s.enemies) {
+      if (e.dead || e.def.prop) continue;
+      if (Math.abs(e.x - p.x) > hw || Math.abs(e.y - p.y) > hh) continue;
+      if (e.boss) hitEnemy(s, e, e.maxHp * bossFrac, 0, 0, 'tide');
+      else killEnemy(s, e, 'tide');
+    }
+    for (const b of s.eshots) b.dead = true;
+  }
+
+  function levelCheck(s) {
+    const p = s.p;
+    while (p.xp >= p.xpNext) { p.xp -= p.xpNext; p.level++; p.xpNext = xpFor(p.level); s.pendingLv++; }
+  }
+
+  function milestone(s, i) {
+    const m = D.MILESTONES[i], p = s.p;
+    if (m.k === 'xp') { p.xp = Math.max(p.xp, p.xpNext); levelCheck(s); p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.2); }
+    else if (m.k === 'chest') dropItem(s, 'chest', p.x + 46, p.y - 24);
+    else if (m.k === 'birds') {
+      for (let k = 0; k < 14; k++) {
+        const left = k % 2 === 0, y = p.y + U.rnd(s.r, -s.view.hh * 0.9, s.view.hh * 0.9), x = p.x + (left ? -1 : 1) * (s.view.hw + 60);
+        s.shots.push({ k: 'bird', x, y, vx: (left ? 1 : -1) * 620, vy: U.rnd(s.r, -40, 40), dmg: 45 * p.might + p.level * 3, r: 18,
+          life: (2 * s.view.hw + 160) / 620, hit: [], src: 'birds', dead: false });
+      }
+      s.fx.push({ k: 'birds' });
+    } else if (m.k === 'heal') { p.hp = p.maxHp; dropItem(s, 'chest', p.x - 46, p.y - 24); }
+    else if (m.k === 'tide') { screenClear(s, 0.08); for (const g of s.gems) g.mag = true; s.fx.push({ k: 'bomb' }); }
+    s.fx.push({ k: 'milestone', i, v: m.v, kind: m.k });
   }
 
   function startVictory(s, b) {
@@ -514,7 +606,7 @@
     if (p.moving) { const m = Math.hypot(ix, iy); p.dx = ix / m; p.dy = iy / m; if (Math.abs(ix) > 0.15) p.face = ix > 0 ? 1 : -1; }
     p.mx = ix; p.my = iy;
     const tile = tileAt(s, p.x, p.y);
-    const sp = p.speed * GS.TILE_SLOW[tile] * (p.slowT > 0 ? 0.55 : 1);
+    const sp = p.speed * GS.TILE_SLOW[tile] * (p.slowT > 0 && p.sprintT <= 0 ? 0.55 : 1) * (p.sprintT > 0 ? 1.45 : 1);
     let vx = ix * sp, vy = iy * sp;
     if (s.storm) { vx += s.storm.wx * 0.35; vy += s.storm.wy * 0.35; }
     const nx = p.x + vx * dt, ny = p.y + vy * dt;
@@ -538,6 +630,7 @@
     }
     if (p.inv > 0) p.inv -= dt;
     if (p.slowT > 0) p.slowT -= dt;
+    if (p.sprintT > 0) p.sprintT -= dt;
   }
 
   function updateFollowers(s) {
@@ -556,17 +649,30 @@
   }
 
   // ── 무기 ───────────────────────────────────────────────
+  const nearBuf = [];
   function nearest(s, x, y, maxD) {
     const b = s.boss;
     if (b && !b.dead && U.d2(x, y, b.x, b.y) < 420 * 420) return b;
+    for (const r of [150, 320]) {
+      if (r >= maxD) break;
+      s.grid.query(x, y, r, nearBuf);
+      let best = null, bd = r * r;
+      for (const e of nearBuf) {
+        if (e.dead || e.def.prop) continue;
+        const d = U.d2(x, y, e.x, e.y);
+        if (d < bd) { bd = d; best = e; }
+      }
+      if (best) return best;
+    }
     let best = null, bd = maxD * maxD;
     for (const e of s.enemies) {
-      if (e.dead) continue;
+      if (e.dead || e.def.prop) continue;
       const d = U.d2(x, y, e.x, e.y);
       if (d < bd) { bd = d; best = e; }
     }
     return best;
   }
+  const notProp = e => !e.dead && !e.def.prop;
 
   function areaHit(s, x, y, rad, dmg, kb, src) {
     let n = 0;
@@ -583,13 +689,14 @@
     return n;
   }
 
-  function updateWeapons(s, dt) {
+  function updateWeapons(s, dt0) {
     const p = s.p;
+    const dt = dt0 * (p.onMarsh ? C.MARSH_HASTE : 1);
     for (const w of s.weapons) {
       const st = w.st, kind = D.WEAPONS[w.id].kind;
       const o = w.fol || p;
       if (kind === 'orbit') {
-        w.ang = (w.ang + st.spd * dt) % TAU;
+        w.ang = (w.ang + st.spd * dt0) % TAU;
         let rad = st.rad;
         if (st.pulse) rad *= 1 + 0.55 * Math.max(0, Math.sin(s.t * 1.8));
         w.pos.length = 0;
@@ -644,13 +751,13 @@
       } else if (kind === 'lob') {
         const cands = [];
         const r2 = st.range * st.range;
-        for (const e of s.enemies) if (!e.dead && U.d2(p.x, p.y, e.x, e.y) < r2) cands.push(e);
+        for (const e of s.enemies) if (notProp(e) && U.d2(p.x, p.y, e.x, e.y) < r2) cands.push(e);
         if (!cands.length) { w.t = 0.2; continue; }
         w.t = st.cd;
         const bi = s.boss ? cands.indexOf(s.boss) : -1;
         if (bi > 0) { cands.splice(bi, 1); cands.unshift(s.boss); }
         for (let i = 0; i < st.n; i++) {
-          const e = cands.length ? cands.splice(i === 0 && cands[0] === s.boss ? 0 : Math.floor(s.r() * cands.length), 1)[0] : U.pick(s.r, s.enemies.filter(x => !x.dead));
+          const e = cands.length ? cands.splice(i === 0 && cands[0] === s.boss ? 0 : Math.floor(s.r() * cands.length), 1)[0] : U.pick(s.r, s.enemies.filter(notProp));
           if (!e) break;
           s.shots.push({ k: 'lob', x0: o.x, y0: o.y, tx: e.x, ty: e.y, x: o.x, y: o.y, z: 0, tt: 0, flight: st.flight,
             dmg: st.dmg, area: st.area, puddle: !!st.puddle, life: 3, src: w.id, dead: false });
@@ -674,7 +781,7 @@
         }
         if (st.birds) {
           for (let i = 0; i < st.birds; i++) {
-            const tgt = U.pick(s.r, s.enemies.filter(e => !e.dead && U.d2(e.x, e.y, p.x, p.y) < 380 * 380));
+            const tgt = U.pick(s.r, s.enemies.filter(e => notProp(e) && U.d2(e.x, e.y, p.x, p.y) < 380 * 380));
             const a = tgt ? Math.atan2(tgt.y - p.y, tgt.x - p.x) : s.r() * TAU;
             s.shots.push({ k: 'bird', x: p.x, y: p.y, vx: Math.cos(a) * 520, vy: Math.sin(a) * 520, dmg: st.dmg * 0.7, r: 14, life: 1.1, hit: [], src: w.id, dead: false });
           }
@@ -703,7 +810,7 @@
         const tgt = nearest(s, o.x, o.y, 480);
         if (!tgt) { w.t = 0.15; continue; }
         w.t = st.cd;
-        const cands = s.enemies.filter(e => !e.dead && U.d2(e.x, e.y, o.x, o.y) < 480 * 480);
+        const cands = s.enemies.filter(e => notProp(e) && U.d2(e.x, e.y, o.x, o.y) < 480 * 480);
         for (let i = 0; i < st.n; i++) {
           const e = i === 0 ? tgt : (cands.length ? cands[Math.floor(s.r() * cands.length)] : tgt);
           s.shots.push({ k: 'ball', x: o.x, y: o.y - 6, tid: e.id, tx: e.x, ty: e.y, spd: st.spd, dmg: st.dmg, r: st.size, left: st.bounces,
@@ -720,7 +827,7 @@
         }
         s.fx.push({ k: 'bubbles', x: o.x, y: o.y });
       } else if (kind === 'cloud') {
-        const cands = s.enemies.filter(e => !e.dead && U.d2(e.x, e.y, p.x, p.y) < 320 * 320);
+        const cands = s.enemies.filter(e => notProp(e) && U.d2(e.x, e.y, p.x, p.y) < 320 * 320);
         if (!cands.length) { w.t = 0.25; continue; }
         w.t = st.cd;
         for (let i = 0; i < st.n; i++) {
@@ -782,7 +889,7 @@
           sh.left--;
           let nx = null, nd = sh.range * sh.range;
           if (sh.left >= 0) for (const e of s.enemies) {
-            if (e.dead || sh.hit.indexOf(e.id) >= 0) continue;
+            if (e.dead || e.def.prop || sh.hit.indexOf(e.id) >= 0) continue;
             const dd = U.d2(e.x, e.y, sh.x, sh.y);
             if (dd < nd) { nd = dd; nx = e; }
           }
@@ -1039,7 +1146,11 @@
       e.flash -= dt;
       let slow = 1;
       if (e.slowT > 0) { e.slowT -= dt; slow = 1 - e.slowF; } else e.slowF = 0;
-      const sp = e.spd * slow * GS.TILE_SLOW[tileAt(s, e.x, e.y)];
+      const tl = tileAt(s, e.x, e.y);
+      let sp = e.spd * slow * GS.TILE_SLOW[tl];
+      if (!e.boss && (tl === TL.MARSH || tl === TL.POOL)) sp *= C.MARSH_SLOW;
+      const frozen = s.freezeT > 0 && !e.def.prop;
+      if (frozen && e.boss) sp *= 0.5;
       let dx = p.x - e.x, dy = p.y - e.y;
       const dist = Math.hypot(dx, dy) || 1;
       dx /= dist; dy /= dist;
@@ -1067,6 +1178,7 @@
           break;
         }
         case 'sweep': vx = st.vx; vy = st.vy; st.life -= dt; if (st.life <= 0) { e.dead = true; e.silent = true; } break;
+        case 'static': break;
         case 'dozer': bossDozer(s, e, dt, dx, dy); vx = st.vx; vy = st.vy; break;
         case 'octo': bossOcto(s, e, dt, dx, dy); vx = st.vx; vy = st.vy; break;
         case 'tanker': bossTanker(s, e, dt, dx, dy, dist); vx = st.vx; vy = st.vy; break;
@@ -1074,12 +1186,14 @@
         case 'heat': bossHeat(s, e, dt, dx, dy, dist); vx = st.vx; vy = st.vy; break;
       }
       if (!playing && !s.victory) { vx *= 0.2; vy *= 0.2; }
+      if (frozen && !e.boss) { vx = 0; vy = 0; }
       if (Math.abs(vx) > 2) e.face = vx > 0 ? 1 : -1;
       e.x += (vx + e.kx) * dt; e.y += (vy + e.ky) * dt;
       const kd = Math.exp(-9 * dt); e.kx *= kd; e.ky *= kd;
       if (s.storm && !e.boss) { e.x += s.storm.wx * dt / Math.sqrt(e.mass); e.y += s.storm.wy * dt / Math.sqrt(e.mass); }
+      if (e.def.prop) { e.kx = e.ky = 0; continue; }
       if (!e.boss && e.beh !== 'sweep' && dist > 1050) { const q = offscreen(s, 40); e.x = q.x; e.y = q.y; e.kx = e.ky = 0; }
-      if (playing && dist < e.r + p.r) {
+      if (playing && dist < e.r + p.r && !(frozen && !e.boss)) {
         if (p.inv <= 0) hurt(s, e.dmg, e);
         if (e.def.snare) p.slowT = Math.max(p.slowT, 0.5);
       }
@@ -1087,7 +1201,7 @@
     }
     // 서로 겹치지 않게 살짝 밀어내기
     for (const e of s.enemies) {
-      if (e.dead || e.boss) continue;
+      if (e.dead || e.boss || e.def.prop) continue;
       s.grid.query(e.x, e.y, e.r + 20, near);
       let c = 0;
       for (const o of near) {
@@ -1174,7 +1288,7 @@
         g.dead = true;
         s.carbon += g.v;
         p.xp += g.v * p.xpMul;
-        while (p.xp >= p.xpNext) { p.xp -= p.xpNext; p.level++; p.xpNext = xpFor(p.level); s.pendingLv++; }
+        levelCheck(s);
         s.fx.push({ k: 'gem', tier: g.tier, x: p.x, y: p.y });
       }
     }
@@ -1190,6 +1304,10 @@
       if (it.k === 'heal') { p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.3); s.fx.push({ k: 'heal', x: p.x, y: p.y }); }
       else if (it.k === 'magnet') { for (const g of s.gems) g.mag = true; s.fx.push({ k: 'magnet', x: p.x, y: p.y }); }
       else if (it.k === 'chest' && s.mode === 'play') openChest(s);
+      else if (it.k === 'bomb') { screenClear(s, 0.06); s.fx.push({ k: 'bomb' }); }
+      else if (it.k === 'freeze') { s.freezeT = 6; s.fx.push({ k: 'freeze' }); }
+      else if (it.k === 'pouch') { const v = Math.round((8 + s.r() * 12) * (1 + 0.3 * (s.stage.id - 1))); s.bonusPearls += v; s.fx.push({ k: 'pouch', v }); }
+      else if (it.k === 'feather') { p.sprintT = 8; p.inv = Math.max(p.inv, 8); s.fx.push({ k: 'feather' }); }
     }
   }
 
@@ -1203,7 +1321,11 @@
       if (m.tiles[i] === TL.MUD && m.grow[i] > 0 && s.t >= m.grow[i]) { setTile(s, i, TL.MARSH); s.carbon += 2; n++; }
     }
     if (n) s.fx.push({ k: 'bloom', n });
-    if (!s.victory) s.greenMax = Math.max(s.greenMax, m.clean / m.land);
+    s.green = m.clean / m.land;
+    if (!s.victory) {
+      s.greenMax = Math.max(s.greenMax, s.green);
+      while (s.mIdx < D.MILESTONES.length && s.green >= D.MILESTONES[s.mIdx].v && s.mode === 'play') milestone(s, s.mIdx++);
+    }
   }
 
   function updateStorm(s, dt) {
@@ -1217,7 +1339,7 @@
     if (w.bolt <= 0) {
       w.bolt = 0.75;
       const p = s.p;
-      const cands = s.enemies.filter(e => !e.dead && Math.abs(e.x - p.x) < s.view.hw && Math.abs(e.y - p.y) < s.view.hh);
+      const cands = s.enemies.filter(e => notProp(e) && Math.abs(e.x - p.x) < s.view.hw && Math.abs(e.y - p.y) < s.view.hh);
       const e = cands.length ? U.pick(s.r, cands) : null;
       if (e) { s.fx.push({ k: 'bolt', x: e.x, y: e.y }); areaHit(s, e.x, e.y, 44, 70 + s.t * 0.2, 200, 'storm'); }
     }
@@ -1246,6 +1368,13 @@
     }
     if (s.boss && !s.boss.dead && !s.enraged && s.t > s.bossT0 + 90) { s.enraged = true; s.boss.spd *= 1.4; s.boss.dmg *= 1.3; s.fx.push({ k: 'alert', id: 'rage' }); }
     spawnTick(s, dt);
+    updatePend(s, dt);
+    if (!s.victory) {
+      s.propT -= dt;
+      if (s.propT <= 0) { s.propT = C.PROP_EVERY; if (s.propCount < C.PROP_MAX * (s.mod.loot ? 2 : 1)) placeProps(s, 1, 430); }
+    }
+    if (s.freezeT > 0) s.freezeT -= dt;
+    if (s.comboT > 0) { s.comboT -= dt; if (s.comboT <= 0) { s.combo = 0; s.comboStep = 0; } }
     updatePlayer(s, dt, s.victory ? null : inp);
     updateFollowers(s);
     s.grid.clear();
@@ -1263,7 +1392,7 @@
     updateStorm(s, dt);
     if (s.victory) updateVictory(s, dt);
     compact(s.enemies); compact(s.shots); compact(s.eshots); compact(s.mines); compact(s.novas);
-    compact(s.zones); compact(s.gems); compact(s.items); compact(s.hrings);
+    compact(s.zones); compact(s.gems); compact(s.items); compact(s.hrings); compact(s.pend);
     if (s.boss && s.boss.dead) s.boss = null;
     if (s.pendingLv > 0 && s.mode === 'play' && !s.victory) {
       s.mode = 'levelup';
@@ -1277,7 +1406,7 @@
     const p = s.p, b = s.bot || (s.bot = { ang: s.r() * TAU, vx: 0, vy: 0 });
     let ax = 0, ay = 0, threat = 0;
     for (const e of s.enemies) {
-      if (e.dead) continue;
+      if (e.dead || e.def.prop) continue;
       const dx = p.x - e.x, dy = p.y - e.y, d2 = dx * dx + dy * dy;
       const R = e.boss ? 330 : 200;
       if (d2 > R * R) continue;
@@ -1309,7 +1438,7 @@
     const low = p.hp < p.maxHp * 0.45;
     for (const it of s.items) {
       const d = U.d2(p.x, p.y, it.x, it.y);
-      if ((it.k === 'chest' || (it.k === 'heal' && low) || it.k === 'magnet') && d < 600 * 600) { best = it; bd = d; break; }
+      if ((it.k === 'chest' || (it.k === 'heal' && low) || it.k !== 'heal') && d < 600 * 600) { best = it; bd = d; break; }
     }
     if (best && bd < 360 * 360) {
       const d = Math.sqrt(bd) + 1, w = threat > 2 ? 0.25 : 0.9;
@@ -1359,7 +1488,7 @@
   function results(s) {
     const win = s.mode === 'won';
     const restored = s.map.clean / s.map.land;
-    const pearls = Math.round((s.kills * 0.03 + s.carbon * 0.012 + s.t * 0.12 + (win ? 60 : 0) + s.bossKills * 60 + s.bonusPearls)
+    const pearls = Math.round((s.kills * 0.022 + s.carbon * 0.008 + s.t * 0.12 + (win ? 60 : 0) + s.bossKills * 60 + s.bonusPearls)
       * (1 + 0.5 * (s.stage.id - 1)) * (1 + D.STARS.pearls * (s.star - 1)) * (1 + 0.1 * (s.meta.greed || 0)));
     let mvp = null, mv = 0;
     for (const k in s.stats) if (D.WEAPONS[k] && s.stats[k] > mv) { mv = s.stats[k]; mvp = k; }
@@ -1368,12 +1497,12 @@
       carbon: Math.round(s.carbon), restored, pearls, killedBy: s.killedBy, mvp,
       build: s.weapons.map(w => ({ id: w.id, lv: w.lv, evo: w.evo })), passives: Object.assign({}, s.passives),
       seen: Object.keys(s.seen), star: s.star, endless: s.endless, bossKills: s.bossKills, evoCount: s.evoCount,
-      stormSurvived: s.stormSurvived, greenMax: s.greenMax,
+      stormSurvived: s.stormSurvived, greenMax: s.greenMax, comboMax: s.comboMax, propsBroken: s.propsBroken, daily: s.daily, mods: s.mods,
     };
   }
 
   GS.sim = {
     WW, WH, newRun, step, choose, reroll, closeChest, bot, botChoose, results, tileAt, xpFor, wstat, rollChoices,
-    restoreAt, spawnEnemy, hitEnemy, densAt, densFor,
+    restoreAt, spawnEnemy, hitEnemy, densAt, densFor, killEnemy, dropItem,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

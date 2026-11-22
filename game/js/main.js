@@ -8,13 +8,15 @@
 
   const DEF = () => ({ pearls: 0, up: {}, unlocked: {}, cleared: 0, best: {}, totalKills: 0, bestTime: 0, codex: { crab: 1, claw: 1 },
     runs: 0, tips: {}, settings: { sfx: true, music: true, shake: true, dmg: true }, char: 'crab', stage: 1,
-    stars: {}, starSel: {}, endless: false, endlessBest: {}, ach: {} });
+    stars: {}, starSel: {}, endless: false, endlessBest: {}, ach: {}, acc: { owned: {}, on: null }, daily: {} });
   function loadMeta() {
     try { const v = JSON.parse(root.localStorage.getItem(KEY) || 'null'); return v && typeof v === 'object' ? v : null; } catch (e) { return null; }
   }
   const meta = Object.assign(DEF(), loadMeta() || {});
   meta.settings = Object.assign(DEF().settings, meta.settings || {});
-  for (const k of ['stars', 'starSel', 'endlessBest', 'ach', 'best', 'up', 'unlocked', 'codex', 'tips']) if (!meta[k] || typeof meta[k] !== 'object') meta[k] = {};
+  for (const k of ['stars', 'starSel', 'endlessBest', 'ach', 'best', 'up', 'unlocked', 'codex', 'tips', 'daily']) if (!meta[k] || typeof meta[k] !== 'object') meta[k] = {};
+  if (!meta.acc || typeof meta.acc !== 'object') meta.acc = { owned: {}, on: null };
+  if (!meta.acc.owned) meta.acc.owned = {};
   function save() { try { root.localStorage.setItem(KEY, JSON.stringify(meta)); } catch (e) { /* 저장이 막힌 곳에서도 게임은 계속돼요 */ } }
 
   let mode = 'title', s = null, demo = null, paused = false, ended = false, endAt = 0, snapCam = true;
@@ -99,7 +101,7 @@
       const inGame = mode === 'play' && s;
       if (inGame && /^Arrow/.test(e.code)) e.preventDefault();
       keys[e.code] = true;
-      const modal = ['levelup', 'chest', 'pause', 'result', 'shop', 'codex'].some(id => UI.isOpen(id));
+      const modal = ['levelup', 'chest', 'pause', 'result', 'shop', 'codex', 'daily'].some(id => UI.isOpen(id));
       if (inGame) {
         if (/^(Arrow|Key[WASD])/.test(e.code)) hideHint();
         if ((e.code === 'Escape' || e.code === 'KeyP') && !ended) { if (UI.isOpen('pause')) resume(); else if (s.mode === 'play') pause(); }
@@ -130,7 +132,8 @@
   const SFX = { dmg: 'hit', gem: 'gem', heal: 'heal', levelup: 'level', pick: 'pick', evo: 'evo', chest: 'chest', shoot: 'shoot', drip: 'drip',
     sweep: 'sweep', splash: 'splash', dash: 'dash', erupt: 'erupt', nova: 'nova', jump: 'jump', mine: 'mine', bolt: 'bolt', emit: 'emit',
     charge: 'charge', slam: 'slam', blast: 'blast', bloom: 'bloom', magnet: 'magnet', revive: 'revive', bosskill: 'bosskill',
-    boing: 'boing', pop: 'pop', bubbles: 'bubble', ink: 'ink', toss: 'jump', heatPulse: 'heatPulse', bloomBoss: 'bloomBoss' };
+    boing: 'boing', pop: 'pop', bubbles: 'bubble', ink: 'ink', toss: 'jump', heatPulse: 'heatPulse', bloomBoss: 'bloomBoss',
+    milestone: 'milestone', bomb: 'bomb', freeze: 'freeze', pouch: 'coin', feather: 'feather', combo: 'combo', break: 'break', emerge: 'emerge', cancel: 'cancel' };
   function sound(e) {
     if (e.k === 'kill') { AU.play(e.boss ? 'bosskill' : 'kill'); return; }
     if (e.k === 'hurt') { AU.play('hurt'); AU.buzz(25); return; }
@@ -150,6 +153,9 @@
       sound(e);
       if (e.k === 'emit') queueTip('pave', '매립되면 갯벌 속 탄소가 다시 빠져나가요!');
       if (e.k === 'gem') queueTip('gem', '파란 결정은 갯벌이 붙잡은 탄소예요. 모으면 강해져요!');
+      if (e.k === 'emerge' && st === s) queueTip('emerge', '회색 오염 땅에서 몬스터가 솟아나요');
+      if (e.k === 'cancel' && st === s) queueTip('cancel', '먼저 초록으로 살리면 몬스터가 못 나와요!');
+      if (e.k === 'break' && st === s) queueTip('trash', '쓰레기 더미를 부수면 아이템이 나와요');
       if (e.k === 'levelup') AU.buzz(12);
     }
     st.fx.length = 0;
@@ -157,8 +163,9 @@
   function queueTip(key, text) { if (!meta.tips[key] && !tipQ.some(t => t[0] === key)) tipQ.push([key, text]); }
   function runTips(now) {
     if (!s || s.mode !== 'play') return;
-    if (s.kills >= 3) queueTip('restore', '쓰러뜨린 자리마다 갯벌이 되살아나요');
-    if (s.p.onMarsh && s.p.hp < s.p.maxHp * 0.95 && s.t > 8) queueTip('marsh', '초록 염습지 위에 서 있으면 체력이 차올라요');
+    if (s.kills >= 3) queueTip('restore2', '쓰러뜨린 자리는 초록 갯벌로 되살아나요');
+    if (s.p.onMarsh && s.t > 6) queueTip('marsh2', '초록 갯벌 위에선 체력이 차고 공격이 빨라져요');
+    if (s.green > 0.09) queueTip('gauge', '갯벌을 살릴수록 위 게이지 보상이 열려요');
     if (tipQ.length && now - tipAt > 5200 && !hintOn) { const [k, t] = tipQ.shift(); UI.tip(k, t); tipAt = now; }
   }
 
@@ -179,16 +186,41 @@
     snapCam = true;
   }
 
-  function closeModals() { for (const id of ['levelup', 'chest', 'pause', 'result', 'shop', 'codex']) UI.show(id, false); }
+  function closeModals() { for (const id of ['levelup', 'chest', 'pause', 'result', 'shop', 'codex', 'daily']) UI.show(id, false); }
 
-  function play() {
-    if (!charOk(meta.char)) { UI.toast('아직 잠겨 있어요'); AU.play('deny'); return; }
+  function dailyInfo() {
+    const d = new Date();
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const seed = GS.hashStr('daily:' + key), r = GS.rng(seed);
+    const stage = 1 + Math.floor(r() * Math.min(D.STAGES.length, (meta.cleared || 0) + 1));
+    const chars = D.CHARS.filter(c => !c.unlock || meta.unlocked[c.id]);
+    const char = chars[Math.floor(r() * chars.length)].id;
+    const pool = D.MODS.slice(), mods = [];
+    for (let i = 0; i < 2; i++) mods.push(pool.splice(Math.floor(r() * pool.length), 1)[0].id);
+    return { key, seed, stage, char, mods };
+  }
+  function dailyState(info) { if (!meta.daily || meta.daily.key !== info.key) meta.daily = { key: info.key, best: 0, claimed: false }; return meta.daily; }
+  function openDaily() { const info = dailyInfo(); UI.openDaily(info, dailyState(info)); AU.play('click'); }
+  function startDaily() { UI.show('daily', false); const info = dailyInfo(); play({ stage: info.stage, char: info.char, seed: info.seed, mods: info.mods, daily: true }); }
+  function prewarmFor(st) {
+    const names = new Set(['gem1', 'gem2', 'gem3', 'heart', 'magnet', 'chest', 'tidewave', 'shell', 'pouch', 'feather', 'trash', 'burrow', 'crab', 'spoonbill', 'mudskipper']);
+    for (const [, mix] of st.mix) for (const k in mix) names.add(D.ENEMIES[k].model);
+    for (const ev of st.events) if (ev.e) names.add(D.ENEMIES[ev.e].model);
+    names.add(D.ENEMIES[st.boss].model);
+    GS.art.prewarm([...names]);
+  }
+  function play(o) {
+    o = o || {};
+    if (!o.daily && !charOk(meta.char)) { UI.toast('아직 잠겨 있어요'); AU.play('deny'); return; }
     if (!stageOk(meta.stage)) meta.stage = 1;
     AU.unlock(); AU.play('start');
     const sid = 's' + meta.stage, best = meta.best[sid];
-    const endless = !!(meta.endless && best && best.win);
+    const endless = !o.daily && !!(meta.endless && best && best.win);
     const star = Math.min((meta.stars[sid] || 0) + 1, meta.starSel[sid] || 1);
-    s = SIM.newRun({ stage: meta.stage, char: meta.char, meta: meta.up, star: endless ? 1 : star, endless });
+    if (o.daily) s = SIM.newRun({ stage: o.stage, char: o.char, meta: meta.up, seed: o.seed, mods: o.mods, daily: true });
+    else s = SIM.newRun({ stage: meta.stage, char: meta.char, meta: meta.up, star: endless ? 1 : star, endless });
+    s.skin = meta.acc.on || null;
+    prewarmFor(s.stage);
     s.view = R.view();
     mode = 'play'; paused = false; ended = false; acc = 0; snapCam = true; tipQ.length = 0; tipAt = 0;
     joyRelease();
@@ -253,13 +285,18 @@
     if (firstClear && r.stage < D.STAGES.length) unlocks.push('새 스테이지 ' + D.STAGES[r.stage].name);
     const achs = [];
     for (const a of D.ACH) if (!meta.ach[a.id] && achMet(a, r)) { meta.ach[a.id] = 1; meta.pearls += a.reward; achs.push(a); }
+    if (r.daily) {
+      const ds = dailyState(dailyInfo());
+      ds.best = Math.max(ds.best || 0, r.time);
+      if (!ds.claimed) { const v = r.win ? 160 : 80; ds.claimed = true; meta.pearls += v; unlocks.push('오늘의 도전 +' + v); }
+    }
     save();
     UI.showHud(false); UI.hint(false); hintOn = false;
     UI.openResult(s, r, { newBest, unlocks, achs });
     setTimeout(() => { if (mode === 'play' && UI.isOpen('result')) AU.music('title'); }, 1600);
   }
 
-  function again() { UI.show('result', false); play(); }
+  function again() { UI.show('result', false); if (s && s.daily) startDaily(); else play(); }
   function home() {
     closeModals();
     mode = 'title'; s = null; ended = false; paused = false;
@@ -283,6 +320,14 @@
     if (k > (meta.stars[sid] || 0) + 1) return;
     meta.starSel[sid] = k; meta.endless = false;
     save(); UI.renderTitle(); AU.play('click');
+  }
+  function buyAcc(id, btn) {
+    const a = D.ACC.find(x => x.id === id);
+    if (!a) return;
+    if (meta.acc.owned[id]) { meta.acc.on = meta.acc.on === id ? null : id; save(); AU.play('click'); }
+    else if ((meta.pearls || 0) >= a.cost) { meta.pearls -= a.cost; meta.acc.owned[id] = true; meta.acc.on = id; save(); AU.play('buy'); }
+    else { AU.play('deny'); UI.toast('진주가 모자라요'); if (btn) { btn.classList.remove('deny'); void btn.offsetWidth; btn.classList.add('deny'); } return; }
+    UI.renderShop(); UI.renderAcc();
   }
   function toggleEndless() { meta.endless = !meta.endless; save(); UI.renderTitle(); AU.play('click'); }
   function openShop() { UI.openShop(); AU.play('click'); }
@@ -390,7 +435,7 @@
     const reduced = root.matchMedia ? root.matchMedia('(prefers-reduced-motion: reduce)').matches : false;
     R.setOpt({ reduced, shake: meta.settings.shake, dmg: meta.settings.dmg });
     AU.set({ sfx: meta.settings.sfx, music: meta.settings.music });
-    UI.init({ play, choose, reroll, closeChest, pause, resume, quit, again, home, pickChar, pickStage, pickStar, toggleEndless, openShop, closeShop,
+    UI.init({ play: () => play(), choose, reroll, closeChest, pause, resume, quit, again, home, pickChar, pickStage, pickStar, toggleEndless, openShop, closeShop, buyAcc, openDaily, startDaily,
       openCodex, closeCodex, buy, toggleSound, setting, save }, meta);
     bindInput();
     newDemo();
