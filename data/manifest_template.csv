@@ -1,0 +1,4 @@
+image_path,object_id,batch_id,captured_at,labels,quality_state,lighting,wet,orientation,exposure_us,size_mm,annotator,note
+images/B20261210/C0001_a.png,C0001,B20261210,2026-12-10T10:01:02,NORMAL_EXT,ok,cross_pol,drained,up,500,38,kim,
+images/B20261210/C0001_b.png,C0001,B20261210,2026-12-10T10:01:09,NORMAL_EXT,ok,diffuse,drained,down,500,38,kim,반대면
+images/B20261210/C0002_a.png,C0002,B20261210,2026-12-10T10:02:11,BROKEN;CRACK_SUSPECT,ok,cross_pol,wet,up,500,41,kim,
