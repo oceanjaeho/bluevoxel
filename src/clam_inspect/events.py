@@ -61,7 +61,7 @@ class InspectionEvent:
 
 class EventLog:
     def __init__(self, path: str | Path):
-        self.conn = sqlite3.connect(str(path))
+        self.conn = sqlite3.connect(str(path), check_same_thread=False)
         self.conn.executescript(SCHEMA)
 
     def record(self, ev: InspectionEvent) -> None:

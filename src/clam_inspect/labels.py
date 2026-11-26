@@ -12,19 +12,31 @@ from typing import Iterable, Mapping
 
 
 class ExtLabel(str, Enum):
-    """관찰된 상부 표면의 외관 라벨 (5종)."""
+    """관찰된 상부 표면의 외관 라벨."""
 
     NORMAL_EXT = "NORMAL_EXT"  # 정상 후보 (가시 표면 기준)
     BROKEN = "BROKEN"  # 명확한 파손
     CHIPPED = "CHIPPED"  # 허용 범위를 넘은 결손
     CRACK_SUSPECT = "CRACK_SUSPECT"  # 균열 의심 (성장선과 구분 불가)
     UNKNOWN = "UNKNOWN"  # 판독 보류
+    FOREIGN = "FOREIGN"  # 다른 조개류·이물 혼입
 
 
 # 즉시 불량으로 분리하는 라벨
-DEFECT_LABELS = frozenset({ExtLabel.BROKEN, ExtLabel.CHIPPED})
+DEFECT_LABELS = frozenset({ExtLabel.BROKEN, ExtLabel.CHIPPED, ExtLabel.FOREIGN})
 # 재검사로 보내는 불확실 라벨
 UNCERTAIN_LABELS = frozenset({ExtLabel.CRACK_SUSPECT, ExtLabel.UNKNOWN})
+
+
+# 현장 라벨링 화면에서 쓰는 쉬운 이름 (누가 봐도 구분되는 상태만)
+KO_NAMES = {
+    ExtLabel.NORMAL_EXT: "정상",
+    ExtLabel.BROKEN: "깨짐",
+    ExtLabel.CHIPPED: "이 빠짐",
+    ExtLabel.CRACK_SUSPECT: "금 감",
+    ExtLabel.FOREIGN: "다른 조개·이물",
+    ExtLabel.UNKNOWN: "모르겠음",
+}
 
 
 class Quality(str, Enum):

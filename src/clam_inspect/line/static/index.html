@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>바지락 선별 라인</title>
+<style>
+:root{color-scheme:light dark;--bg:light-dark(#f4f6f5,#0f1312);--card:light-dark(#ffffff,#171d1b);--ink:light-dark(#14201d,#e6eeec);--mute:light-dark(#5d6d69,#97a8a4);--line:light-dark(#dbe3e1,#26302d);--teal:light-dark(#0b6e63,#43c1ae);--pass:light-dark(#1f8a4c,#5fd394);--reject:light-dark(#c62f2f,#ff7a7a);--recheck:light-dark(#b26b00,#f3b54a);--stop:#c62f2f}
+*{box-sizing:border-box;min-width:0}
+[hidden]{display:none!important}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+header{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line);padding:10px max(16px,env(safe-area-inset-left)) 0;display:grid;gap:8px}
+.top{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.top h1{font-size:18px;margin:0 8px 0 0}
+.pill{padding:4px 12px;border-radius:999px;font-weight:700;font-size:14px;background:var(--line)}
+.pill.RUNNING{background:var(--pass);color:#fff}.pill.FAULT,.pill.ESTOP{background:var(--stop);color:#fff}
+.top .sp{flex:1}
+button{font:inherit;min-height:44px;padding:0 18px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;font-weight:600}
+button:active{transform:translateY(1px)}
+button.go{background:var(--pass);border-color:var(--pass);color:#fff}
+button.halt{background:var(--ink);color:var(--bg)}
+button.estop{background:var(--stop);border-color:var(--stop);color:#fff}
+nav{display:flex;gap:4px;overflow-x:auto}
+nav button{border:0;border-bottom:3px solid transparent;border-radius:0;background:none;min-height:40px;padding:0 14px;color:var(--mute)}
+nav button[aria-selected=true]{color:var(--ink);border-color:var(--teal)}
+main{padding:16px max(16px,env(safe-area-inset-left)) 40px;max-width:1400px;margin:0 auto}
+.msg{min-height:20px;color:var(--mute);font-size:14px}
+.fault{background:var(--stop);color:#fff;border-radius:8px;padding:10px 14px;font-weight:600;margin-bottom:12px}
+.run{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+.card h2{font-size:15px;margin:0 0 10px;color:var(--mute);font-weight:600}
+.live{background:#0b1210;border-radius:8px;min-height:260px;display:grid;place-items:center;overflow:hidden}
+.live img{display:block;width:100%;height:auto}
+.live span{color:#8aa}
+.bins{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.bin{border-radius:10px;padding:12px;background:var(--bg)}
+.bin b{display:block;font-size:clamp(30px,4vw,44px);line-height:1.05;font-variant-numeric:tabular-nums}
+.bin.pass b{color:var(--pass)}.bin.reject b{color:var(--reject)}.bin.recheck b{color:var(--recheck)}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(8em,1fr));gap:10px;margin-top:12px}
+.kv div{font-size:13px;color:var(--mute)}.kv b{display:block;font-size:20px;color:var(--ink);font-variant-numeric:tabular-nums}
+.kv .bad b{color:var(--reject)}
+ul.plain{list-style:none;margin:0;padding:0}
+.reasons li{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)}
+.recent li{display:grid;grid-template-columns:48px minmax(0,1fr) auto;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
+.recent img,.thumb{width:48px;height:48px;object-fit:cover;border-radius:6px;background:var(--line)}
+.tag{font-weight:700;white-space:nowrap}
+.tag.normal_candidate{color:var(--pass)}.tag.defect{color:var(--reject)}.tag.recheck{color:var(--recheck)}
+.small{font-size:13px;color:var(--mute)}
+.lab{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:16px;align-items:start}
+.labimg{background:#0b1210;border-radius:12px;aspect-ratio:1;display:grid;place-items:center;overflow:hidden}
+.labimg img{width:100%;height:100%;object-fit:contain}
+.choices{display:grid;gap:10px}
+.choice{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;text-align:left;min-height:68px;padding:10px 16px;align-items:center}
+.choice kbd{grid-row:span 2;font:700 18px system-ui;border:1px solid var(--line);border-radius:6px;padding:4px 10px;background:var(--bg)}
+.choice b{font-size:18px}.choice span{font-size:13px;color:var(--mute);font-weight:400}
+.choice[data-v=NORMAL_EXT]{border-left:6px solid var(--pass)}.choice[data-v=BROKEN]{border-left:6px solid var(--reject)}.choice[data-v=CRACK_SUSPECT]{border-left:6px solid var(--recheck)}.choice[data-v=FOREIGN]{border-left:6px solid #7c5cff}.choice[data-v=UNKNOWN]{border-left:6px solid var(--mute)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+input,select{font:inherit;font-size:16px;min-height:44px;padding:0 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+.bar{height:10px;border-radius:5px;background:var(--line);overflow:hidden}.bar i{display:block;height:100%;background:var(--teal)}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th{text-align:left;color:var(--mute);font-weight:600;border-bottom:2px solid var(--line);padding:8px 8px 8px 0;white-space:nowrap}
+td{border-bottom:1px solid var(--line);padding:6px 8px 6px 0;vertical-align:middle}
+td.n{font-variant-numeric:tabular-nums;white-space:nowrap}
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(14em,1fr));gap:14px}
+.form label{display:grid;gap:4px;font-size:14px;color:var(--mute)}
+pre{background:var(--bg);border-radius:8px;padding:12px;overflow:auto;font-size:12px;max-height:360px}
+@media(max-width:860px){.run,.lab{grid-template-columns:minmax(0,1fr)}}
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <h1>바지락 선별 라인</h1>
+    <span class="pill" id="state">-</span>
+    <span class="small" id="model"></span>
+    <span class="sp"></span>
+    <button class="go" data-cmd="start">운전</button>
+    <button class="halt" data-cmd="stop">정지</button>
+    <button data-cmd="reset">초기화</button>
+    <button class="estop" data-cmd="estop">비상정지</button>
+  </div>
+  <nav role="tablist">
+    <button role="tab" data-tab="run" aria-selected="true">운전</button>
+    <button role="tab" data-tab="label" aria-selected="false">라벨링</button>
+    <button role="tab" data-tab="hist" aria-selected="false">이력</button>
+    <button role="tab" data-tab="set" aria-selected="false">설정</button>
+  </nav>
+</header>
+<main>
+  <div class="msg" id="msg"></div>
+  <div class="fault" id="fault" hidden></div>
+
+  <section id="tab-run">
+    <div class="run">
+      <div class="card">
+        <h2>실시간 영상 <span class="small">초록 정상 후보 · 빨강 불량 · 주황 재검사</span></h2>
+        <div class="live" id="live"><span>운전을 시작하면 영상이 나옵니다</span></div>
+      </div>
+      <div style="display:grid;gap:16px;align-content:start">
+        <div class="card">
+          <h2>배출 통</h2>
+          <div class="bins">
+            <div class="bin pass"><b id="c-pass">0</b>정상 후보</div>
+            <div class="bin reject"><b id="c-reject">0</b>불량</div>
+            <div class="bin recheck"><b id="c-recheck">0</b>재검사</div>
+          </div>
+          <div class="kv">
+            <div><b id="k-permin">0</b>최근 1분 처리 개수</div>
+            <div><b id="k-lat">-</b>분석 시간 p50 / p99 (ms)</div>
+            <div><b id="k-pending">0</b>벨트 위 추적 중</div>
+            <div id="k-forced-w"><b id="k-forced">0</b>분석 지연 구간 우회</div>
+            <div id="k-mis-w"><b id="k-mis">0</b>배출 불일치</div>
+            <div><b id="k-frames">0</b>촬영 프레임</div>
+          </div>
+        </div>
+        <div class="card"><h2>재검사·불량 사유</h2><ul class="plain reasons" id="reasons"><li class="small">아직 없음</li></ul></div>
+        <div class="card"><h2>최근 판정</h2><ul class="plain recent" id="recent"><li class="small">아직 없음</li></ul></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-label" hidden>
+    <div class="row" style="margin-bottom:12px">
+      <input id="labeler" placeholder="이름 (예: 김현장)" autocomplete="name" style="width:12em">
+      <span class="small" id="lab-stats"></span>
+    </div>
+    <div class="bar" style="margin-bottom:16px"><i id="lab-bar" style="width:0"></i></div>
+    <div class="lab">
+      <div class="labimg" id="lab-img"><span class="small">이름을 입력하면 사진이 나옵니다</span></div>
+      <div>
+        <div class="choices" id="choices"></div>
+        <div class="row" style="margin-top:12px">
+          <button id="undo">되돌리기 (Z)</button>
+          <span class="small" id="lab-info"></span>
+        </div>
+        <p class="small">누가 봐도 분명한 상태만 고르세요. 조금이라도 애매하면 '모르겠음'이 맞습니다. 같은 사진을 두 사람이 다르게 고르면 학습에서 빠지고 따로 모입니다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab-hist" hidden>
+    <div class="row" style="margin-bottom:12px">
+      <select id="hist-route"><option value="">전체</option><option value="normal_candidate">정상 후보</option><option value="defect">불량</option><option value="recheck">재검사</option></select>
+      <button id="hist-refresh">새로고침</button>
+    </div>
+    <div class="card scroll"><table><thead><tr><th>사진</th><th>검사 ID</th><th>판정</th><th>사유</th><th>실제 도착</th><th>품질</th><th>분석 ms</th><th>시각</th></tr></thead><tbody id="hist"></tbody></table></div>
+  </section>
+
+  <section id="tab-set" hidden>
+    <div class="card">
+      <h2>운전 설정 (정지 상태에서만 변경)</h2>
+      <div class="form">
+        <label>벨트 속도 (mm/s)<input id="s-speed" type="number" step="10" min="10"></label>
+        <label>불량 확신 기준 (깨짐·이물)<input id="s-defect" type="number" step="0.05" min="0.05" max="1"></label>
+        <label>금 감 재검사 기준<input id="s-crack" type="number" step="0.05" min="0.05" max="1"></label>
+        <label>정상 확신 기준<input id="s-normal" type="number" step="0.05" min="0.05" max="1"></label>
+      </div>
+      <div class="row" style="margin-top:12px"><button class="go" id="s-save">저장</button><button id="s-export">라벨 내보내기 (CSV)</button></div>
+      <p class="small">정상 기준이 높을수록 확실한 것만 정상으로 내보내고 나머지는 재검사로 갑니다.</p>
+    </div>
+    <div class="card" style="margin-top:16px"><h2>전체 설정</h2><pre id="s-json"></pre></div>
+  </section>
+</main>
+<script>
+{
+const $=id=>document.getElementById(id);
+const api=async(path,opt={})=>{const r=await fetch(path,{headers:{'Content-Type':'application/json'},...opt});if(!r.ok){let t='';try{t=(await r.json()).detail}catch{};throw new Error(t||r.statusText)}return r.json()};
+const say=t=>{$('msg').textContent=t};
+const STATE_KO={RUNNING:'운전 중',STOPPED:'정지',FAULT:'장치 이상',ESTOP:'비상정지'};
+let tab='run';
+
+document.querySelectorAll('[data-cmd]').forEach(b=>b.addEventListener('click',async()=>{
+  if(b.dataset.cmd==='estop'&&!window.__estopOk){window.__estopOk=true;b.textContent='한 번 더 누르면 정지';setTimeout(()=>{window.__estopOk=false;b.textContent='비상정지'},2500);return}
+  try{const r=await api('/api/cmd/'+b.dataset.cmd,{method:'POST'});say(r.message)}catch(e){say(e.message)}
+  window.__estopOk=false;document.querySelector('[data-cmd=estop]').textContent='비상정지';poll()}));
+
+document.querySelectorAll('nav button').forEach(b=>b.addEventListener('click',()=>{
+  tab=b.dataset.tab;document.querySelectorAll('nav button').forEach(x=>x.setAttribute('aria-selected',x===b));
+  for(const t of ['run','label','hist','set'])$('tab-'+t).hidden=t!==tab;
+  if(tab==='label')nextItem();if(tab==='hist')loadHist();if(tab==='set')loadCfg()}));
+
+function li(children){const l=document.createElement('li');children.forEach(c=>l.append(c));return l}
+function el(tag,cls,text){const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e}
+
+let lastFrames=-1;
+async function poll(){
+  let s;try{s=await api('/api/state')}catch(e){say('서버 연결 끊김: '+e.message);return}
+  $('state').textContent=STATE_KO[s.state]||s.state;$('state').className='pill '+s.state;
+  $('model').textContent=s.model==='none'?'분류 모델 없음: 모든 개체가 재검사로 갑니다':'모델 '+s.model;
+  $('fault').hidden=!s.fault;$('fault').textContent=s.fault?s.fault:'';
+  $('c-pass').textContent=s.counts.normal_candidate;$('c-reject').textContent=s.counts.defect;$('c-recheck').textContent=s.counts.recheck;
+  $('k-permin').textContent=s.per_min;$('k-lat').textContent=(s.latency_ms.p50??'-')+' / '+(s.latency_ms.p99??'-');
+  $('k-pending').textContent=s.pending;$('k-frames').textContent=s.frames;
+  $('k-forced').textContent=s.forced_windows;$('k-forced-w').className=s.forced_windows?'bad':'';
+  $('k-mis').textContent=s.arrival_mismatch;$('k-mis-w').className=s.arrival_mismatch?'bad':'';
+  const rs=$('reasons');rs.replaceChildren(...(s.reasons.length?s.reasons.map(r=>li([el('span',null,r.reason_ko),el('b',null,String(r.n))])):[el('li','small','아직 없음')]));
+  const rc=$('recent');rc.replaceChildren(...(s.recent.length?s.recent.slice(0,10).map(r=>{const im=el('img');im.alt='';if(r.has_crop)im.src='/api/object/'+encodeURIComponent(r.id)+'.png';const mid=el('div');mid.append(el('div',null,r.reason_ko),el('div','small',r.id));return li([im,mid,el('span','tag '+r.route,r.route_ko)])}):[el('li','small','아직 없음')]));
+  if(s.frames!==lastFrames&&s.frames>0){lastFrames=s.frames;const im=new Image();im.alt='최근 촬영 영상';im.onload=()=>$('live').replaceChildren(im);im.src='/api/frame.jpg?f='+s.frames}
+  if(tab==='label')showStats(s.labeling);
+}
+setInterval(poll,800);poll();
+
+// ---- 라벨링 ----
+const HINT={NORMAL_EXT:'깨진 곳·금이 없음',BROKEN:'껍데기 일부가 깨지거나 떨어져 나감',CRACK_SUSPECT:'선처럼 갈라진 금 (성장선 무늬 아님)',FOREIGN:'바지락이 아님 (다른 조개, 돌, 이물)',UNKNOWN:'사진으로 판단할 수 없음'};
+let choices=[],cur=null;
+try{$('labeler').value=localStorage.getItem('labeler')||''}catch{}
+$('labeler').addEventListener('change',()=>{try{localStorage.setItem('labeler',$('labeler').value.trim())}catch{};nextItem()});
+api('/api/label/choices').then(cs=>{choices=cs;$('choices').replaceChildren(...cs.map((c,i)=>{const b=el('button','choice');b.dataset.v=c.value;const k=el('kbd',null,String(i+1));b.append(k,el('b',null,c.ko),el('span',null,HINT[c.value]||''));b.addEventListener('click',()=>submit(c.value));return b}))});
+function who(){return $('labeler').value.trim()}
+function showStats(st){if(!st)return;$('lab-stats').textContent=`전체 ${st.items}장 · 라벨 ${st.labeled}장 · 남음 ${st.remaining}장 · 의견 갈림 ${st.conflicts}장`;$('lab-bar').style.width=(st.items?st.labeled/st.items*100:0)+'%'}
+async function nextItem(){
+  if(!who()){$('lab-img').replaceChildren(el('span','small','이름을 먼저 입력하세요'));return}
+  const r=await api('/api/label/next?labeler='+encodeURIComponent(who()));showStats(r.stats);cur=r.item;
+  if(!cur){$('lab-img').replaceChildren(el('span','small','더 볼 사진이 없습니다. 수고하셨습니다.'));$('lab-info').textContent='';return}
+  const im=new Image();im.alt='라벨링할 개체 사진';im.src='/api/crop/'+encodeURIComponent(cur.item_id);$('lab-img').replaceChildren(im);
+  $('lab-info').textContent=cur.item_id+(cur.n_labels?` · 다른 사람 ${cur.n_labels}명이 봄`:'');
+}
+async function submit(v){if(!cur||!who())return;try{await api('/api/label',{method:'POST',body:JSON.stringify({item_id:cur.item_id,labeler:who(),label:v})});nextItem()}catch(e){say(e.message)}}
+$('undo').addEventListener('click',undo);
+async function undo(){if(!who())return;const r=await api('/api/label/undo',{method:'POST',body:JSON.stringify({labeler:who()})});if(r.item_id){say('되돌림: '+r.item_id);const it=r.item_id;cur={item_id:it};const im=new Image();im.alt='';im.src='/api/crop/'+encodeURIComponent(it);$('lab-img').replaceChildren(im);$('lab-info').textContent=it+' (다시 고르세요)'}}
+document.addEventListener('keydown',e=>{if(tab!=='label'||e.target.tagName==='INPUT')return;const n=parseInt(e.key,10);if(n>=1&&n<=choices.length)submit(choices[n-1].value);if(e.key==='z'||e.key==='Z')undo()});
+
+// ---- 이력 ----
+const ROUTE_KO={normal_candidate:'정상 후보',defect:'불량',recheck:'재검사'};
+$('hist-refresh').addEventListener('click',loadHist);$('hist-route').addEventListener('change',loadHist);
+async function loadHist(){
+  const rows=await api('/api/events?limit=200'+($('hist-route').value?'&route='+$('hist-route').value:''));
+  $('hist').replaceChildren(...rows.map(r=>{const tr=document.createElement('tr');const im=el('img','thumb');im.alt='';im.loading='lazy';im.src='/api/object/'+encodeURIComponent(r.inspection_id)+'.png';const td0=el('td');td0.append(im);
+    tr.append(td0,el('td','small',r.inspection_id),el('td','tag '+r.route,ROUTE_KO[r.route]||r.route),el('td',null,r.reason_ko),el('td',null,ROUTE_KO[r.dispatch_result]||r.dispatch_result||'-'),el('td',null,r.quality_state),el('td','n',r.latency_ms!=null?Math.round(r.latency_ms):'-'),el('td','small',(r.captured_at||'').replace('T',' ').slice(0,19)));return tr}));
+  if(!rows.length)$('hist').replaceChildren(Object.assign(document.createElement('tr'),{innerHTML:'<td colspan="8" class="small">기록 없음</td>'}));
+}
+
+// ---- 설정 ----
+async function loadCfg(){const c=await api('/api/config');$('s-speed').value=c.belt_speed_mm_s;$('s-defect').value=c.thresholds.defect;$('s-crack').value=c.thresholds.crack;$('s-normal').value=c.thresholds.normal;$('s-json').textContent=JSON.stringify(c,null,2)}
+$('s-save').addEventListener('click',async()=>{try{const c=await api('/api/config',{method:'POST',body:JSON.stringify({belt_speed_mm_s:+$('s-speed').value,defect:+$('s-defect').value,crack:+$('s-crack').value,normal:+$('s-normal').value})});$('s-json').textContent=JSON.stringify(c,null,2);say('저장됨 (설정 버전 '+c.config_version+')')}catch(e){say(e.message)}});
+$('s-export').addEventListener('click',async()=>{const r=await api('/api/label/export',{method:'POST'});say(`라벨 ${r.rows}건 내보냄: ${r.path}`)});
+}
+</script>
+</body>
+</html>

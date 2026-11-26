@@ -71,21 +71,28 @@ def segment_on_mat(img_bgr: np.ndarray, cfg: MatConfig = MatConfig()) -> list[In
     for i in range(1, n):
         if st[i, 4] < min_area:
             continue
-        m = (lab == i).astype(np.uint8)
-        cnts, _ = cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-        m = np.zeros_like(m)
-        cv2.drawContours(m, cnts, -1, 1, -1)  # 내부 구멍(무늬) 채움
+        # 개체 주변만 잘라 처리한다 (전체 영상 크기로 연산하면 개체 수만큼 느려짐)
+        cx, cy, cw, ch = st[i, :4]
+        pad = 4
+        ox, oy = max(0, cx - pad), max(0, cy - pad)
+        ex, ey = min(w, cx + cw + pad), min(h, cy + ch + pad)
+        sub = (lab[oy:ey, ox:ex] == i).astype(np.uint8)
+        cnts, _ = cv2.findContours(sub, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        sub = np.zeros_like(sub)
+        cv2.drawContours(sub, cnts, -1, 1, -1)  # 내부 구멍(무늬) 채움
         # 개체 크기에 비례한 열림: 가는 물줄기·반사 꼬리 제거
-        r = max(3, int(cfg.open_frac * cv2.distanceTransform(m, cv2.DIST_L2, 5).max()))
-        m = cv2.morphologyEx(m, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * r + 1, 2 * r + 1)))
-        nn, l2, s2, _ = cv2.connectedComponentsWithStats(m)
+        r = max(3, int(cfg.open_frac * cv2.distanceTransform(sub, cv2.DIST_L2, 5).max()))
+        sub = cv2.morphologyEx(sub, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * r + 1, 2 * r + 1)))
+        nn, l2, s2, _ = cv2.connectedComponentsWithStats(sub)
         if nn < 2:
             continue
         j = 1 + int(np.argmax(s2[1:, 4]))
         if s2[j, 4] < min_area:
             continue
-        m = (l2 == j).astype(np.uint8)
-        cnt = max(cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)[0], key=cv2.contourArea)
+        m = np.zeros((h, w), np.uint8)
+        m[oy:ey, ox:ex] = (l2 == j)
+        cnt = max(cv2.findContours(m[oy:ey, ox:ex], cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE,
+                                   offset=(int(ox), int(oy)))[0], key=cv2.contourArea)
         x, y, bw, bh = cv2.boundingRect(cnt)
         (_, _), (a, b), _ = cv2.minAreaRect(cnt)
         area = int(m.sum())

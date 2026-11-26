@@ -12,10 +12,14 @@ dependencies = ["numpy>=1.24", "Pillow>=10"]
 [project.optional-dependencies]
 train = ["torch>=2.2", "torchvision>=0.17"]
 bootstrap = ["opencv-python-headless>=4.8"]
+line = ["opencv-python-headless>=4.8", "fastapi>=0.110", "uvicorn>=0.29", "httpx>=0.27"]
 dev = ["pytest>=8"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"clam_inspect.line" = ["static/*.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
