@@ -55,6 +55,20 @@ data/
 
 라벨이 애매한 시료는 `UNKNOWN`으로 두고 판정 예시집에 모읍니다.
 
+## 실사진에서 라벨링 초안 만들기 (학습 전 단계)
+
+초록·청록 매트 위에 바지락을 띄워 놓고 찍은 사진이면, 학습 없이 색으로 개체를 분리해
+낱개 영상과 라벨링 초안을 만들 수 있습니다.
+
+```bash
+pip install -e ".[bootstrap]"
+python -m clam_inspect.bootstrap photos/*.jpg --batch-id B20261126 --out data/bootstrap
+```
+
+출력: `objects/*.png`(원본 해상도 낱개 영상), `manifest_draft.csv`(labels는 UNKNOWN, 사람이 채움),
+`annotations_draft.json`(COCO 개체 윤곽), `features.csv`(크기·비율·간격·색·품질), `*_overlay.jpg`.
+첫 실사진 결과는 `samples/20261126_mat01/analysis.html`에 있습니다.
+
 ## 실행 순서
 
 ```bash

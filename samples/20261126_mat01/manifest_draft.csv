@@ -1,0 +1,11 @@
+﻿image_path,object_id,batch_id,captured_at,labels,quality_state,lighting,wet,orientation,exposure_us,size_mm,annotator,note
+objects/B20261126-IMG_29971-01.png,B20261126-IMG_29971-01,B20261126,,UNKNOWN,ok,,,,,,auto,"source=IMG_29971.jpg box=[123, 212, 287, 404]"
+objects/B20261126-IMG_29971-02.png,B20261126-IMG_29971-02,B20261126,,UNKNOWN,ok,,,,,,auto,"source=IMG_29971.jpg box=[397, 235, 552, 425]"
+objects/B20261126-IMG_29971-03.png,B20261126-IMG_29971-03,B20261126,,UNKNOWN,ok,,,,,,auto,"source=IMG_29971.jpg box=[742, 251, 901, 424]"
+objects/B20261126-IMG_29971-04.png,B20261126-IMG_29971-04,B20261126,,UNKNOWN,ok,,,,,,auto,"source=IMG_29971.jpg box=[181, 607, 305, 723]"
+objects/B20261126-IMG_29971-05.png,B20261126-IMG_29971-05,B20261126,,UNKNOWN,ok,,,,,,auto,"source=IMG_29971.jpg box=[204, 874, 315, 1003]"
+objects/B20261126-IMG_29971-06.png,B20261126-IMG_29971-06,B20261126,,UNKNOWN,ok,,,,,,auto,"source=IMG_29971.jpg box=[453, 878, 545, 1015]"
+objects/B20261126-IMG_29971-07.png,B20261126-IMG_29971-07,B20261126,,UNKNOWN,ok,,,,,,auto,"source=IMG_29971.jpg box=[697, 878, 844, 992]"
+objects/B20261126-IMG_29971-08.png,B20261126-IMG_29971-08,B20261126,,UNKNOWN,ok,,,,,,auto,"source=IMG_29971.jpg box=[221, 1130, 390, 1236]"
+objects/B20261126-IMG_29971-09.png,B20261126-IMG_29971-09,B20261126,,UNKNOWN,ok,,,,,,auto,"source=IMG_29971.jpg box=[469, 1119, 589, 1237]"
+objects/B20261126-IMG_29971-10.png,B20261126-IMG_29971-10,B20261126,,UNKNOWN,ok,,,,,,auto,"source=IMG_29971.jpg box=[675, 1090, 817, 1227]"
