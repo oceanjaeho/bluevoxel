@@ -83,7 +83,7 @@ test('진화는 무기 5단계 + 짝 패시브가 있을 때만 나와요', () =
   assert.equal(seen, true);
 });
 
-test('여덟 가지 생물 무기가 모두 피해를 줘요', () => {
+test('모든 생물 무기가 피해를 줘요', () => {
   for (const id of Object.keys(D.WEAPONS)) {
     const s = sim.newRun({ seed: 13 });
     s.weapons.length = 0;
@@ -122,7 +122,7 @@ test('진주 보상은 업그레이드 한두 개 값 정도예요', () => {
   assert.ok(o.r.pearls >= 20 && o.r.pearls <= 200, 'pearls ' + o.r.pearls);
 });
 
-test('세 스테이지 모두 지도와 보스가 만들어져요', () => {
+test('모든 스테이지에 지도와 보스가 만들어져요', () => {
   for (const st of D.STAGES) {
     const s = sim.newRun({ stage: st.id, seed: 23 });
     assert.ok(s.map.land > 1500, 'land ' + s.map.land);
