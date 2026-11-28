@@ -347,8 +347,8 @@ node tools/build-single.mjs --fragment --out X.html   # 아티팩트용
 
 ## 8. 저장소 상태
 
-- 브랜치는 `claude/eco-strategy-game-prototype-2bhgzv`이고, 최신 커밋은 v0.5와 이 문서예요.
-- **GitHub 푸시가 403으로 막혀 있어요.** Claude GitHub 앱 권한이 없어서 커밋이 로컬에만 있어요. 사용자는 백업 zip(v0.3~v0.5)을 받았어요.
+- GitHub 저장소 `oceanjaeho/bluevoxel`의 브랜치 `claude/eco-strategy-game-prototype-2bhgzv`에 전부 올라가 있어요. 최신 커밋은 v0.5와 이 문서예요.
+- 기본 브랜치에는 아직 합치지 않았고, PR도 없어요.
 - 플레이 링크는 claude.ai 아티팩트예요. **비공개**라서 다른 AI는 열 수 없어요. 실행하려면 `game/index.html`이나 빌드한 `dist/gaetbeol.html`을 쓰세요.
 
 ---
